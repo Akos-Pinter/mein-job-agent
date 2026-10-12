@@ -3,3 +3,4 @@ langchain-groq>=0.2.0
 pydantic>=2.0.0
 mcp>=1.0.0
 requests
+apify-client
