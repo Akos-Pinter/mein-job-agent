@@ -36,14 +36,11 @@ USER_PROFILE = """
 async def fetch_jobs_via_mcp(search_query: str):
     print(f"🔌 Starte MCP-Client und verbinde mit Job-Source-Server für: '{search_query}'...")
     server_params = StdioServerParameters(
-        command="npx",
-        args=["--yes", "apify-cli", "mcp", "run", "apify/actor-linkedin-jobs-scraper"],
+        command="apify",
+        args=["mcp", "run", "apify/actor-linkedin-jobs-scraper"],
         env={
             "APIFY_TOKEN": os.getenv("APIFY_API_TOKEN"),
-            "PATH": os.getenv("PATH"),
-            "CI": "true",                           # Signalisiert NPX, dass es in einer Cloud läuft
-            "APIFY_DISABLE_VERSION_CHECK": "1",      # Verhindert Update-Abfragen im Terminal
-            "NPX_INTERACTIVE": "false"               # Erzwingt rein automatische Ausführung
+            "PATH": os.getenv("PATH")
         }
     )
     
