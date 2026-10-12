@@ -104,10 +104,8 @@ async def fetch_jobs_via_mcp(search_query: str):
 # 4. LangChain-Chain definieren (Llama 3.3 70B via Groq)
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
-    
-    # HIER KORRIGIERT: Nutzen von 'llama-3.3-70b-versatile' oder 'llama-3.1-8b-instant'
     llm = ChatGroq(
-        model="qwen/qwen3.6-27b", 
+        model="mixtral-8x7b-32768", 
         temperature=0.0,
         groq_api_key=api_key
     )
