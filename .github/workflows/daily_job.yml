@@ -18,10 +18,13 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Node.js für MCP-Server installieren
+    - name: Node.js installieren
       uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '22'
+
+    - name: Apify-CLI global installieren
+      run: npm install -g apify-cli --no-audit --no-fund
 
     - name: Abhängigkeiten installieren
       run: |
