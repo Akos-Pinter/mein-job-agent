@@ -45,36 +45,40 @@ async def fetch_jobs_via_mcp(search_query: str):
         }
     )
     
+    # Hilfsfunktion für den eigentlichen Verbindungsaufbau und Abruf
+    async def run_mcp_session():
+        async with stdio_client(server_params) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                
+                print("📥 Rufe strukturierte Daten über MCP-Tool ab...")
+                mcp_response = await session.call_tool(
+                    name="run-actor", 
+                    arguments={
+                        "searchQueries": [search_query],
+                        "limitPerQuery": 10
+                    }
+                )
+                
+                raw_data = json.loads(mcp_response.content[0].text)
+                
+                jobs = []
+                for item in raw_data[:10]:
+                    jobs.append({
+                        "title": item.get("title", "Kein Titel"),
+                        "company": item.get("companyName", "Unbekannte Firma"),
+                        "description": item.get("description", "")[:1000],
+                        "location": item.get("location", "N/A")
+                    })
+                return jobs
+
+    # Wir setzen das 45-Sekunden-Limit kompatibel für Python 3.10 mit asyncio.wait_for um
     try:
-        async with asyncio.timeout(45):
-            async with stdio_client(server_params) as (read_stream, write_stream):
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
+        jobs = await asyncio.wait_for(run_mcp_session(), timeout=45.0)
+        print(f"✅ {len(jobs)} Jobs erfolgreich über MCP empfangen.")
+        return jobs
                     
-                    print("📥 Rufe strukturierte Daten über MCP-Tool ab...")
-                    mcp_response = await session.call_tool(
-                        name="run-actor", 
-                        arguments={
-                            "searchQueries": [search_query],
-                            "limitPerQuery": 10
-                        }
-                    )
-                    
-                    raw_data = json.loads(mcp_response.content[0].text)
-                    
-                    jobs = []
-                    for item in raw_data[:10]:
-                        jobs.append({
-                            "title": item.get("title", "Kein Titel"),
-                            "company": item.get("companyName", "Unbekannte Firma"),
-                            "description": item.get("description", "")[:1000],
-                            "location": item.get("location", "N/A")
-                        })
-                    
-                    print(f"✅ {len(jobs)} Jobs erfolgreich über MCP empfangen.")
-                    return jobs
-                    
-    except TimeoutError:
+    except asyncio.TimeoutError:
         print("⚠️ MCP-Abfrage hat das Zeitlimit (45s) überschritten. Breche Verbindung ab...")
     except Exception as e:
         print(f"⚠️ MCP-Verbindung fehlgeschlagen: {e}")
@@ -95,6 +99,7 @@ async def fetch_jobs_via_mcp(search_query: str):
             "location": "München (Remote)"
         }
     ]
+
 
 # 4. LangChain-Chain definieren (Llama 3.3 70B via Groq)
 def create_matching_chain():
