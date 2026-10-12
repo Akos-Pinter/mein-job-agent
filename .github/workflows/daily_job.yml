@@ -21,7 +21,7 @@ jobs:
     - name: Node.js für MCP-Server installieren
       uses: actions/setup-node@v4
       with:
-        node-version: '20' # Node 20 ist für MCP-Server extrem stabil
+        node-version: '24'
 
     - name: Abhängigkeiten installieren
       run: |
