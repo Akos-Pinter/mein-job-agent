@@ -1,5 +1,5 @@
-langchain-core
-langchain-groq
-pydantic==1.10.13
-mcp
+langchain-core>=0.3.0
+langchain-groq>=0.2.0
+pydantic>=2.0.0
+mcp>=1.0.0
 requests
