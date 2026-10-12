@@ -23,8 +23,8 @@ jobs:
       with:
         node-version: '22'
 
-    - name: Apify-CLI global installieren
-      run: npm install -g apify-cli --no-audit --no-fund
+    - name: Apify-CLI mit MCP-Unterstützung installieren
+      run: npm install -g apify-cli@next --no-audit --no-fund
 
     - name: Abhängigkeiten installieren
       run: |
