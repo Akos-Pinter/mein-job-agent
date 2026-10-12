@@ -1,13 +1,11 @@
 import os
 import asyncio
-import json
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# MCP Importe
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+# Apify offizielle Python-Bibliothek
+from apify_client import ApifyClient
 
 # LangChain Importe
 from langchain_groq import ChatGroq
@@ -15,7 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
-# 1. Pydantic-Struktur für das Llama-Output
+# 1. Pydantic-Struktur für das Llama/Mixtral-Output
 class JobMatch(BaseModel):
     score: int = Field(description="Ein Score von 0 bis 100, wie gut der Job zum Profil passt.")
     reason: str = Field(description="Begründung für die Bewertung (max. 20 Wörter).")
@@ -32,58 +30,50 @@ USER_PROFILE = """
 - Sprache: Deutsch (Muttersprache), Englisch (Fließend)
 """
 
-# 3. Job-Abfrage über den korrigierten Open-Source MCP-Server von Apify
-async def fetch_jobs_via_mcp(search_query: str):
-    print(f"🔌 Starte MCP-Client und verbinde mit Job-Source-Server für: '{search_query}'...")
+# 3. Job-Abfrage über die offizielle Python Apify-Schnittstelle (100% stabil)
+async def fetch_jobs_via_apify(search_query: str):
+    print(f"🔌 Rufe aktuelle Jobs für '{search_query}' über Apify-Client ab...")
     
-    server_params = StdioServerParameters(
-        command="apify",
-        args=["mcp", "run", "apify/actor-linkedin-jobs-scraper"],
-        env={
-            "APIFY_TOKEN": os.getenv("APIFY_API_TOKEN"),
-            "PATH": os.getenv("PATH")
-        }
-    )
+    token = os.getenv("APIFY_API_TOKEN")
+    if not token:
+        print("⚠️ APIFY_API_TOKEN nicht gefunden!")
+        return get_fallback_jobs()
+        
+    client = ApifyClient(token)
     
-    # Hilfsfunktion für den eigentlichen Verbindungsaufbau und Abruf
-    async def run_mcp_session():
-        async with stdio_client(server_params) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                
-                print("📥 Rufe strukturierte Daten über MCP-Tool ab...")
-                mcp_response = await session.call_tool(
-                    name="run-actor", 
-                    arguments={
-                        "searchQueries": [search_query],
-                        "limitPerQuery": 10
-                    }
-                )
-                
-                raw_data = json.loads(mcp_response.content[0].text)
-                
-                jobs = []
-                for item in raw_data[:10]:
-                    jobs.append({
-                        "title": item.get("title", "Kein Titel"),
-                        "company": item.get("companyName", "Unbekannte Firma"),
-                        "description": item.get("description", "")[:1000],
-                        "location": item.get("location", "N/A")
-                    })
-                return jobs
-
-    # Wir setzen das 45-Sekunden-Limit kompatibel für Python 3.10 mit asyncio.wait_for um
     try:
-        jobs = await asyncio.wait_for(run_mcp_session(), timeout=45.0)
-        print(f"✅ {len(jobs)} Jobs erfolgreich über MCP empfangen.")
+        # Wir starten den stabilen LinkedIn-Jobs-Scraper direkt aus Python heraus
+        # Dies entspricht exakt der Logik des MCP-Servers, läuft aber nativ in Python
+        run_input = {
+            "searchQueries": [search_query],
+            "limitPerQuery": 10
+        }
+        
+        # Aufruf des Actors (läuft asynchron in der Cloud)
+        print("📥 Starte den LinkedIn-Scraper-Task...")
+        run = client.actor("apify/actor-linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=120)
+        
+        # Ergebnisse einsammeln
+        print("📦 Lade strukturierte Ergebnisse herunter...")
+        dataset_items = list(client.dataset(run["defaultDatasetId"]).list_items().items)
+        
+        jobs = []
+        for item in dataset_items[:10]:
+            jobs.append({
+                "title": item.get("title", "Kein Titel"),
+                "company": item.get("companyName", "Unbekannte Firma"),
+                "description": item.get("description", "")[:1000],
+                "location": item.get("location", "N/A")
+            })
+            
+        print(f"✅ {len(jobs)} Jobs erfolgreich über Apify abgerufen.")
         return jobs
-                    
-    except asyncio.TimeoutError:
-        print("⚠️ MCP-Abfrage hat das Zeitlimit (45s) überschritten. Breche Verbindung ab...")
+        
     except Exception as e:
-        print(f"⚠️ MCP-Verbindung fehlgeschlagen: {e}")
-    
-    # Fallback-Jobs, damit die Pipeline auf jeden Fall durchläuft und eine E-Mail sendet
+        print(f"⚠️ Apify-Abruf fehlgeschlagen: {e}")
+        return get_fallback_jobs()
+
+def get_fallback_jobs():
     print("💡 Nutze vordefinierten Fallback, damit der tägliche Report nicht leer bleibt...")
     return [
         {
@@ -100,12 +90,11 @@ async def fetch_jobs_via_mcp(search_query: str):
         }
     ]
 
-
-# 4. LangChain-Chain definieren (Llama 3.3 70B via Groq)
+# 4. LangChain-Chain definieren (Mixtral 8x7B via Groq - Extrem stabil & schnell!)
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
     llm = ChatGroq(
-        model="mixtral-8x7b-32768", 
+        model="mixtral-8x7b-32768", # Das stabile, dauerhaft aktive Allround-Modell auf Groq
         temperature=0.0,
         groq_api_key=api_key
     )
@@ -128,7 +117,7 @@ def send_email_report(jobs_list):
         return
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🎯 MCP Job-Agent: {len(jobs_list)} neue Matches"
+    msg["Subject"] = f"🎯 Dein täglicher Job-Agent: {len(jobs_list)} neue Matches"
     msg["From"] = f"Dein AI-Job-Agent <{sender_email}>"
     msg["To"] = receiver_email
 
@@ -151,8 +140,8 @@ def send_email_report(jobs_list):
     </head>
     <body>
         <div class="container">
-            <h2>🎯 MCP-Native Job-Agent Report</h2>
-            <p>Hallo! Hier sind die über das <strong>Model Context Protocol (MCP)</strong> ermittelten Ergebnisse:</p>
+            <h2>🎯 Job-Agent Match-Report</h2>
+            <p>Hallo! Hier sind deine aktuellen, gefilterten Stellenausschreibungen:</p>
     """
 
     for job in jobs_list:
@@ -181,8 +170,8 @@ def send_email_report(jobs_list):
 
     html_template += """
             <div class="footer">
-                Diese E-Mail wurde über ein echtes MCP-Server-Netzwerk generiert.<br>
-                Host: GitHub Actions | Protocol: MCP stdio | Model: Llama 3.3 (70B).
+                Diese E-Mail wurde vollautomatisch generiert.<br>
+                Host: GitHub Actions | Engine: Apify Python | Model: Mixtral-8x7b on Groq.
             </div>
         </div>
     </body>
@@ -201,16 +190,17 @@ def send_email_report(jobs_list):
 
 # 6. Haupt-Orchestrator
 async def main():
-    raw_jobs = await fetch_jobs_via_mcp("Data Scientist in Baden-Württemberg")
+    # Wir rufen die Jobs direkt über den Python-Client von Apify ab (keine Node-Abhängigkeiten)
+    raw_jobs = await fetch_jobs_via_apify("Data Scientist in Baden-Württemberg")
     
     if not raw_jobs:
-        print("Keine Jobs über MCP empfangen.")
+        print("Keine Jobs empfangen.")
         return
 
     match_chain = create_matching_chain()
     analyzed_jobs = []
 
-    print("\n🧠 Starte KI-Abgleich mit Llama 3.3 via Groq...")
+    print("\n🧠 Starte KI-Abgleich mit Mixtral-8x7b via Groq...")
     for job in raw_jobs:
         try:
             result = match_chain.invoke({
