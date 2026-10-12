@@ -1,13 +1,15 @@
 import os
 import asyncio
-import json
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
-# 1. Pydantic-Struktur für strukturiertes JSON-Output von Llama 3.1
+# 1. Pydantic-Struktur für das Llama-Output
 class JobMatch(BaseModel):
     score: int = Field(description="Ein Score von 0 bis 100, wie gut der Job zum Profil passt.")
     reason: str = Field(description="Begründung für die Bewertung (max. 20 Wörter).")
@@ -15,7 +17,7 @@ class JobMatch(BaseModel):
     company: str = Field(description="Die Firma des Jobs.")
     recommended_action: str = Field(description="Empfehlung: 'Bewerben', 'Vielleicht' oder 'Ignorieren'.")
 
-# 2. Ihr persönliches Profil (Hier einfach Ihre Daten anpassen)
+# 2. Ihr persönliches Profil
 USER_PROFILE = """
 - Rolle: Python Backend Entwickler
 - Programmiersprachen: Python (Experte), SQL (Sehr gut), FastAPI, Docker
@@ -24,69 +26,131 @@ USER_PROFILE = """
 - Sprache: Deutsch (Muttersprache), Englisch (Fließend)
 """
 
-# 3. Job-Abfrage über MCP-Anbindung (mit Fallback)
+# 3. Job-Abfrage
 async def fetch_jobs():
     print("🔎 Rufe aktuelle Jobangebote ab...")
-    
-    # Cloud-Alternative für MCP: Da GitHub Actions isoliert läuft, ist der einfachste 
-    # Weg, standardisierte APIs (wie SerpAPI oder freie RSS-Feeds) via MCP/Request zu laden.
     try:
-        # HIER KÖNNEN SIE IHREN MCP-SERVER ANSTEUERN
-        # Falls Sie z.B. einen gehosteten MCP-Server auf Apify/Hugging Face nutzen:
-        # server_params = StdioServerParameters(command="npx", args=["-y", "@apify/cli", "mcp", ...])
-        raise NotImplementedError("Nutze stabilen Fallback-Feed für die Cloud")
-        
-    except Exception:
-        # Robuster, kostenloser Cloud-Fallback: Job-Feed parsen
-        # Wir nutzen ein freies API-Beispiel für Tech-Jobs in Deutschland
         fallback_url = "https://www.arbeitnow.com/api/job-board-api"
         response = requests.get(fallback_url)
         if response.status_code == 200:
             data = response.json()
             jobs = []
-            for item in data.get("data", [])[:5]: # Die neuesten 5 Jobs analysieren
+            for item in data.get("data", [])[:5]:
                 jobs.append({
                     "title": item.get("title"),
                     "company": item.get("company_name"),
-                    "description": item.get("description", "")[:1000], # Text kürzen für Token-Limit
+                    "description": item.get("description", "")[:1000],
                     "location": item.get("location")
                 })
             return jobs
         return []
+    except Exception as e:
+        print(f"❌ Fehler bei Job-Abfrage: {e}")
+        return []
 
-# 4. LangChain-Chain für den Abgleich definieren
+# 4. LangChain-Chain definieren
 def create_matching_chain():
-    # Wir holen uns den API Key aus den GitHub Secrets / Umgebungsvariablen
     api_key = os.getenv("GROQ_API_KEY")
-    
-    # Llama 3.1 70B über Groq initialisieren (Kostenlos und extrem schlau)
     llm = ChatGroq(
         model="llama-3.1-70b-versatile",
         temperature=0.0,
         groq_api_key=api_key
     )
-    
     parser = JsonOutputParser(pydantic_object=JobMatch)
-    
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Du bist ein präziser HR-Analyst. Gleiche den Job mit dem Kandidatenprofil ab.\n{format_instructions}"),
         ("user", "Kandidatenprofil:\n{profile}\n\nJobangebot:\nTitel: {title}\nFirma: {company}\nBeschreibung: {description}")
     ])
-    
     prompt = prompt.partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
 
-# 5. Telegram-Benachrichtigung (Optional, aber genial für die Cloud)
-def send_telegram_message(message):
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    if bot_token and chat_id:
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
-        requests.post(url, json=payload)
-        print("📨 Telegram-Benachrichtigung gesendet!")
+# 5. E-Mail Versendungsfunktion (HTML)
+def send_email_report(jobs_list):
+    sender_email = os.getenv("EMAIL_SENDER")      # Ihre Gmail-Adresse
+    sender_password = os.getenv("EMAIL_PASSWORD")  # Ihr 16-stelliges App-Passwort
+    receiver_email = os.getenv("EMAIL_RECEIVER")  # Empfänger (kann dieselbe Adresse sein)
+    
+    if not sender_email or not sender_password or not receiver_email:
+        print("⚠️ E-Mail-Konfiguration unvollständig. Überspringe Versand.")
+        return
 
-# 6. Hauptprogramm
+    # E-Mail Struktur aufbauen
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🎯 Dein täglicher Job-Report - {len(jobs_list)} neue Matches"
+    msg["From"] = f"Dein AI-Job-Agent <{sender_email}>"
+    msg["To"] = receiver_email
+
+    # HTML-Design für eine schöne Darstellung im Postfach
+    html_template = """
+    <html>
+    <head>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; }
+            .container { max-width: 600px; margin: 20px auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+            h2 { color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+            .job-card { background: #fdfdfd; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin-bottom: 15px; }
+            .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+            .badge-high { background-color: #d1fae5; color: #065f46; }
+            .badge-medium { background-color: #fef3c7; color: #92400e; }
+            .badge-low { background-color: #fee2e2; color: #991b1b; }
+            .score { font-size: 18px; font-weight: bold; float: right; }
+            .reason { font-style: italic; color: #555; margin-top: 10px; }
+            .footer { font-size: 11px; color: #9ca3af; text-align: center; margin-top: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>🎯 Dein täglicher Job-Agent Report</h2>
+            <p>Hallo! Ich habe heute die neuesten Jobs analysiert. Hier sind deine besten Treffer:</p>
+    """
+
+    for job in jobs_list:
+        score = job['score']
+        # Farbliches Badge basierend auf der Empfehlung bestimmen
+        if score >= 70:
+            badge_class = "badge-high"
+            action = "Bewerben!"
+        elif score >= 40:
+            badge_class = "badge-medium"
+            action = "Vielleicht"
+        else:
+            badge_class = "badge-low"
+            action = "Ignorieren"
+
+        html_template += f"""
+            <div class="job-card">
+                <span class="score" style="color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}">{score}% Match</span>
+                <strong style="font-size: 16px;">{job['job_title']}</strong><br>
+                <span style="color: #6b7280; font-size: 14px;">{job['company']}</span>
+                <div style="margin-top: 10px;">
+                    <span class="badge {badge_class}">{action}</span>
+                </div>
+                <p class="reason"><strong>Kompakt-Match:</strong> {job['reason']}</p>
+            </div>
+        """
+
+    html_template += """
+            <div class="footer">
+                Diese E-Mail wurde automatisch von deinem persönlichen AI-Agenten generiert.<br>
+                Host: GitHub Actions | Model: Llama 3.1 (70B) via Groq Cloud.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(html_template, "html"))
+
+    # Über Gmail SMTP-Server versenden
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+        print("📨 E-Mail-Bericht erfolgreich versendet!")
+    except Exception as e:
+        print(f"❌ Fehler beim E-Mail-Versand: {e}")
+
+# 6. Haupt-Orchestrator
 async def main():
     raw_jobs = await fetch_jobs()
     if not raw_jobs:
@@ -112,17 +176,9 @@ async def main():
     # Nach Score sortieren (absteigend)
     analyzed_jobs.sort(key=lambda x: x['score'], reverse=True)
 
-    # Output generieren
-    output_lines = ["🏆 *DEINE TÄGLICHEN TOP-JOBS* 🏆\n"]
-    for match in analyzed_jobs:
-        score_icon = "🟢" if match['score'] >= 70 else "🟡" if match['score'] >= 40 else "🔴"
-        line = f"{score_icon} *{match['score']}%* - {match['job_title']} ({match['company']})\n👉 _Empfehlung:_ *{match['recommended_action']}*\n💬 _Grund:_ {match['reason']}\n"
-        output_lines.append(line)
-        print(line)
-
-    # Nachricht versenden
-    full_message = "\n".join(output_lines)
-    send_telegram_message(full_message)
+    # E-Mail Bericht senden
+    send_email_report(analyzed_jobs)
 
 if __name__ == "__main__":
+    asyncio.run(main())
     asyncio.run(main())
