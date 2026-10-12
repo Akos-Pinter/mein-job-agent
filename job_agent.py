@@ -5,7 +5,7 @@ import requests
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 # 1. Pydantic-Struktur für strukturiertes JSON-Output von Llama 3.1
 class JobMatch(BaseModel):
