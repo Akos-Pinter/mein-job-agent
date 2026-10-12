@@ -32,18 +32,17 @@ USER_PROFILE = """
 - Sprache: Deutsch (Muttersprache), Englisch (Fließend)
 """
 
-# 3. Job-Abfrage über den Open-Source MCP-Server von Apify
+# 3. Job-Abfrage über den korrigierten Open-Source MCP-Server von Apify
 async def fetch_jobs_via_mcp(search_query: str):
     print(f"🔌 Starte MCP-Client und verbinde mit Job-Source-Server für: '{search_query}'...")
     
-    # Konfiguration des MCP-Servers für LinkedIn / Google Jobs
-    # Wir nutzen das offizielle CLI-Tool von Apify als MCP-Schnittstelle
+    # HIER KORRIGIERT: 'apify-cli' statt '@apify/cli'
     server_params = StdioServerParameters(
         command="npx",
-        args=["-y", "@apify/cli", "mcp", "run", "apify/actor-linkedin-jobs-scraper"],
+        args=["-y", "apify-cli", "mcp", "run", "apify/actor-linkedin-jobs-scraper"],
         env={
             "APIFY_TOKEN": os.getenv("APIFY_API_TOKEN"),
-            "PATH": os.getenv("PATH") # Wichtig für Node/Npx in GitHub Actions
+            "PATH": os.getenv("PATH")
         }
     )
     
@@ -53,7 +52,6 @@ async def fetch_jobs_via_mcp(search_query: str):
                 await session.initialize()
                 
                 print("📥 Rufe strukturierte Daten über MCP-Tool ab...")
-                # Aufruf des MCP-Werkzeugs des Servers
                 mcp_response = await session.call_tool(
                     name="run-actor", 
                     arguments={
@@ -62,11 +60,10 @@ async def fetch_jobs_via_mcp(search_query: str):
                     }
                 )
                 
-                # MCP-Antwort auslesen und parsen
                 raw_data = json.loads(mcp_response.content[0].text)
                 
                 jobs = []
-                for item in raw_data[:5]: # Die ersten 5 Ergebnisse nehmen
+                for item in raw_data[:5]:
                     jobs.append({
                         "title": item.get("title", "Kein Titel"),
                         "company": item.get("companyName", "Unbekannte Firma"),
@@ -78,7 +75,6 @@ async def fetch_jobs_via_mcp(search_query: str):
     except Exception as e:
         print(f"⚠️ MCP-Verbindung fehlgeschlagen oder Timeout: {e}")
         print("💡 Nutze lokalen MCP-Simulations-Fallback für den Testlauf...")
-        # Simulierter lokaler Ausweich-MCP-Server-Antwortwert
         return [
             {"title": "Python Software Engineer", "company": "Tech GmbH", "description": "Backend Entwicklung mit Python, FastAPI und Docker in Berlin.", "location": "Berlin"},
             {"title": "DevOps Cloud Engineer", "company": "CloudTech", "description": "AWS, Kubernetes, Terraform und CI/CD Pipelines.", "location": "München"}
@@ -87,8 +83,10 @@ async def fetch_jobs_via_mcp(search_query: str):
 # 4. LangChain-Chain definieren (Llama 3.3 70B via Groq)
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
+    
+    # HIER KORRIGIERT: Nutzen von 'llama-3.3-70b-versatile' oder 'llama-3.1-8b-instant'
     llm = ChatGroq(
-        model="llama-3.3-70b-specdec",
+        model="llama-3.3-70b-versatile", 
         temperature=0.0,
         groq_api_key=api_key
     )
@@ -184,8 +182,7 @@ def send_email_report(jobs_list):
 
 # 6. Haupt-Orchestrator
 async def main():
-    # Jobs über das Model Context Protocol (MCP) holen
-    raw_jobs = await fetch_jobs_via_mcp("Python Developer Berlin")
+    raw_jobs = await fetch_jobs_via_mcp("Data Scientist in Baden-Württemberg")
     
     if not raw_jobs:
         print("Keine Jobs über MCP empfangen.")
