@@ -30,7 +30,7 @@ USER_PROFILE = """
 - Sprache: Deutsch (Muttersprache), Englisch (Fließend)
 """
 
-# 3. Job-Abfrage über die offizielle Python Apify-Schnittstelle (100% stabil)
+# 3. Job-Abfrage über den stabilen Python Apify-Client
 async def fetch_jobs_via_apify(search_query: str):
     print(f"🔌 Rufe aktuelle Jobs für '{search_query}' über Apify-Client ab...")
     
@@ -42,26 +42,23 @@ async def fetch_jobs_via_apify(search_query: str):
     client = ApifyClient(token)
     
     try:
-        # Wir starten den stabilen LinkedIn-Jobs-Scraper direkt aus Python heraus
-        # Dies entspricht exakt der Logik des MCP-Servers, läuft aber nativ in Python
+        # Hier korrigiert: Wir nutzen den exakten, stabilen Actor von bebity
         run_input = {
-            "searchQueries": [search_query],
-            "limitPerQuery": 10
+            "titles": [search_query],
+            "limit": 10
         }
         
-        # Aufruf des Actors (läuft asynchron in der Cloud)
         print("📥 Starte den LinkedIn-Scraper-Task...")
-        run = client.actor("apify/actor-linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=120)
+        run = client.actor("bebity/linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=120)
         
-        # Ergebnisse einsammeln
         print("📦 Lade strukturierte Ergebnisse herunter...")
         dataset_items = list(client.dataset(run["defaultDatasetId"]).list_items().items)
         
         jobs = []
         for item in dataset_items[:10]:
             jobs.append({
-                "title": item.get("title", "Kein Titel"),
-                "company": item.get("companyName", "Unbekannte Firma"),
+                "title": item.get("title", item.get("job_title", "Kein Titel")),
+                "company": item.get("companyName", item.get("company", "Unbekannte Firma")),
                 "description": item.get("description", "")[:1000],
                 "location": item.get("location", "N/A")
             })
@@ -90,11 +87,13 @@ def get_fallback_jobs():
         }
     ]
 
-# 4. LangChain-Chain definieren (Mixtral 8x7B via Groq - Extrem stabil & schnell!)
+# 4. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
+    
+    # HIER KORRIGIERT: Wir nutzen das brandneue Standardmodell 'openai/gpt-oss-20b'
     llm = ChatGroq(
-        model="mixtral-8x7b-32768", # Das stabile, dauerhaft aktive Allround-Modell auf Groq
+        model="openai/gpt-oss-20b", 
         temperature=0.0,
         groq_api_key=api_key
     )
@@ -171,7 +170,7 @@ def send_email_report(jobs_list):
     html_template += """
             <div class="footer">
                 Diese E-Mail wurde vollautomatisch generiert.<br>
-                Host: GitHub Actions | Engine: Apify Python | Model: Mixtral-8x7b on Groq.
+                Host: GitHub Actions | Engine: Apify Python | Model: openai/gpt-oss-20b on Groq.
             </div>
         </div>
     </body>
@@ -190,8 +189,7 @@ def send_email_report(jobs_list):
 
 # 6. Haupt-Orchestrator
 async def main():
-    # Wir rufen die Jobs direkt über den Python-Client von Apify ab (keine Node-Abhängigkeiten)
-    raw_jobs = await fetch_jobs_via_apify("Data Scientist in Baden-Württemberg")
+    raw_jobs = await fetch_jobs_via_apify("Data Scientist")
     
     if not raw_jobs:
         print("Keine Jobs empfangen.")
@@ -200,7 +198,7 @@ async def main():
     match_chain = create_matching_chain()
     analyzed_jobs = []
 
-    print("\n🧠 Starte KI-Abgleich mit Mixtral-8x7b via Groq...")
+    print("\n🧠 Starte KI-Abgleich mit openai/gpt-oss-20b via Groq...")
     for job in raw_jobs:
         try:
             result = match_chain.invoke({
