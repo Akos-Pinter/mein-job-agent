@@ -86,7 +86,7 @@ def create_matching_chain():
     
     # HIER KORRIGIERT: Nutzen von 'llama-3.3-70b-versatile' oder 'llama-3.1-8b-instant'
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile", 
+        model="qwen-2.5-32b", 
         temperature=0.0,
         groq_api_key=api_key
     )
