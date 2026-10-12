@@ -10,17 +10,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Aktualisiert von @v3 auf @v4
     - name: Code auschecken
       uses: actions/checkout@v4
 
-    # Aktualisiert von @v4 auf @v5
     - name: Python installieren
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    # Aktualisiert von @v3 auf @v4
     - name: Node.js für MCP-Server installieren
       uses: actions/setup-node@v4
       with:
