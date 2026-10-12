@@ -2,22 +2,29 @@ name: Täglicher Job-Agent
 
 on:
   schedule:
-    # Jeden Tag um 07:00 UTC (entspricht 08:00 Uhr deutscher Winterzeit)
     - cron: '0 7 * * *'
-  workflow_dispatch: # Erlaubt es, den Agenten jederzeit manuell auf GitHub zu starten
+  workflow_dispatch:
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
 
     steps:
+    # Aktualisiert von @v3 auf @v4
     - name: Code auschecken
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
+    # Aktualisiert von @v4 auf @v5
     - name: Python installieren
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-node-version: '3.10'
+        python-version: '3.10'
+
+    # Aktualisiert von @v3 auf @v4
+    - name: Node.js für MCP-Server installieren
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # Node 20 ist für MCP-Server extrem stabil
 
     - name: Abhängigkeiten installieren
       run: |
@@ -27,7 +34,8 @@ jobs:
     - name: Agenten ausführen
       env:
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+        APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+        EMAIL_SENDER:  ${{ secrets.EMAIL_SENDER }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
       run: |
