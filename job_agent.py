@@ -52,7 +52,7 @@ async def fetch_jobs():
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
     llm = ChatGroq(
-        model="llama-3.1-70b-versatile",
+        model="llama-3.3-70b-specdec",
         temperature=0.0,
         groq_api_key=api_key
     )
