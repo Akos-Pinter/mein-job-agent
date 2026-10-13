@@ -112,11 +112,6 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         except Exception as e:
             print(f"⚠️ Statistiken konnten nicht geladen werden: {e}")
         
-        print(f"📊 --- STATISTIK ---")
-        print(f"🌍 LinkedIn Gesamt-Treffer: {linkedin_search_totals}")
-        print(f"📥 Scraper Importiert: {scraped_total}")
-        print(f"--------------------")
-        
         jobs = []
         for item in dataset_items[:limit]:
             jobs.append({
@@ -128,7 +123,12 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 "salary": item.get("salary", item.get("salarySource", "N/A")),
                 "postDate": item.get("postDate", item.get("postedAt", "N/A"))
             })
-        scraped_total = len(jobs)     
+        scraped_total = len(jobs)
+
+        print(f"📊 --- STATISTIK ---")
+        print(f"🌍 LinkedIn Gesamt-Treffer: {linkedin_search_totals}")
+        print(f"📥 Scraper Importiert: {scraped_total}")
+        print(f"--------------------")
         return {
             "jobs": jobs,
             "linkedin_total": linkedin_search_totals,
