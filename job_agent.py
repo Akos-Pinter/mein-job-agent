@@ -19,7 +19,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 # 📍 IHR WOHNORT
-MY_HOME_LOCATION = "Stuttgart"
+MY_HOME_LOCATION = "Ditzingen 71254"
 
 # 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
