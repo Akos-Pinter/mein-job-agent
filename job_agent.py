@@ -57,7 +57,7 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
 # 3. Job-Abfrage über den stabilen Python Apify-Client (Mit erweiterten Filtern)
 async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, test_mode: bool = False) -> Dict[str, Any]:
     distance_miles = int(distance_km * 0.62)
-    limit = 1 if test_mode else 50
+    limit = 4 if test_mode else 50
     
     print(f"🔌 [TEST_MODE={test_mode}] Rufe aktuelle Jobs (Limit: {limit}) für {search_titles} im Umkreis von {distance_km} km um '{location}' ab...")
     token = os.getenv("APIFY_API_TOKEN")
@@ -94,7 +94,6 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         dataset_list = dataset.list_items()
         dataset_items = dataset_list.items
         
-        scraped_total = len(dataset_items)
         linkedin_search_totals = "Unbekannt"
         try:
             kvs = client.key_value_store(run["defaultKeyValueStoreId"])
@@ -129,7 +128,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 "salary": item.get("salary", item.get("salarySource", "N/A")),
                 "postDate": item.get("postDate", item.get("postedAt", "N/A"))
             })
-            
+        scraped_total = len(jobs)     
         return {
             "jobs": jobs,
             "linkedin_total": linkedin_search_totals,
@@ -207,7 +206,7 @@ def send_email_report(jobs_list: List[Dict[str, Any]], linkedin_total: str, scra
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #1e3a8a; margin-bottom: 20px;">
                 📊 <b>Echtzeit-Stellenmarkt-Statistik für dich:</b><br>
                 • Insgesamt passende Stellen auf LinkedIn vorhanden: <b>{linkedin_total}</b><br>
-                • Davon für diesen Bericht heruntergeladen und analysiert: <b>{scraped_total}</b> (dein Limit: {'1 (Testmodus)' if test_mode else '50'})
+                • Davon für diesen Bericht heruntergeladen und analysiert: <b>{scraped_total}</b> (dein Limit: {'4 (Testmodus)' if test_mode else '50'})
             </div>
     """
 
