@@ -292,7 +292,7 @@ async def main():
     
     # 💡 DIE NEUEN DYNAMISCHEN LIMITS (GETRENNT FÜR SOURCING UND KI-ANALYSE)
     # Sourcing: Wie viele Stellen live auf LinkedIn abgefragt werden.
-    FETCH_LIMIT = 100
+    FETCH_LIMIT = 50
     # KI-Analyse: Wie viele der neu gefundenen Stellen maximal von Groq analysiert werden.
     ANALYZE_LIMIT = 1 if test_mode else 25
     
