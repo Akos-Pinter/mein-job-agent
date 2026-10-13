@@ -41,7 +41,9 @@ class JobMatch(BaseModel):
 def get_coordinates(address):
     try:
         url = "https://nominatim.openstreetmap.org/search"
-        headers = {"User-Agent": "MyJobAgentBot/1.0 (contact@example.com)"}
+        headers = {
+            "User-Agent": "UniqueJobAgentStuttgartUser_AkosPinter_v2" 
+        }
         params = {"q": address, "format": "json", "limit": 1}
         response = requests.get(url, headers=headers, params=params, timeout=10)
         data = response.json()
@@ -50,6 +52,7 @@ def get_coordinates(address):
     except Exception as e:
         print(f"⚠️ Geokodierung für '{address}' fehlgeschlagen: {e}")
     return None
+
 
 # 3. Hilfsfunktion zur Berechnung von Distanz & Auto-Fahrzeit (OSRM)
 def calculate_route_osrm(origin_coords, dest_coords):
@@ -137,11 +140,11 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
     try:
         # Konfiguration für die LinkedIn-API über Apify
         run_input = {
-            "titles": search_titles,      # Übergibt die Liste aller gewünschten Titel
-            "locations": [location],       # Zielregion (z.B. Stuttgart)
-            "distance": distance_miles,    # Radius in Meilen (z.B. 18 Meilen für ~30 km)
-            "limit": 50,                   # Insgesamt maximal 50 Jobs einsammeln
-            "publishedAt": "pastWeek"      # Nur Jobs der letzten Woche, um aktuell zu bleiben
+            "titles": search_titles,
+            "locations": [location],
+            "distance": distance_miles,
+            "limit": 50,
+            "publishedAt": "r604800" # Technischer Code für 'Letzte 7 Tage' (past 7 days)
         }
 
         print("📥 Starte den LinkedIn-Scraper-Task...")
