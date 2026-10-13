@@ -1,26 +1,5 @@
 [
     {
-        "score": 88,
-        "reason": "Starke KI-Erfahrung, gute Erreichbarkeit; Auto 35 Min., ÖPNV 50 Min.",
-        "job_title": "(Senior) Data Scientist / AI Engineer GenAI & KI-Agenten (m/w/d)",
-        "company": "Würth Deutschland",
-        "location": "Stadt Heilbronn, Baden-Württemberg, Germany",
-        "route_distance": "35 km",
-        "route_duration": "35 Min. Autofahrt",
-        "route_transit": "50 Min. mit ÖPNV",
-        "salary_source": "N/A",
-        "post_date": "N/A",
-        "job_summary": "Entwicklung von GenAI- und KI-Agenten für Omnikanal-Vertrieb. Verantwortung für Datenbasis, Prototyping und Betrieb.",
-        "required_qualifications": [
-            "Machine Learning & Deep Learning",
-            "GenAI & KI-Agenten",
-            "Data Engineering & Cloud",
-            "Python & ML libraries",
-            "Experience with AI model deployment"
-        ],
-        "url": "https://www.linkedin.com/jobs/view/4476849544"
-    },
-    {
         "score": 80,
         "reason": "Auto 25 Min., ÖPNV 30 Min. – gut erreichbar.",
         "job_title": "Dr. rer. nat. Physik / Chemie – Data Science & Machine Learning (m/w/d)",
@@ -61,5 +40,26 @@
             "Projektmanagement & Teamführung"
         ],
         "url": "https://www.linkedin.com/jobs/view/4476050981"
+    },
+    {
+        "score": 55,
+        "reason": "Auto 1h, ÖPNV 1h15 – lange Pendelzeit.",
+        "job_title": "AI Engineer – Agentic AI Platform (m/w/d)",
+        "company": "wailand",
+        "location": "Greater Heilbronn Region",
+        "route_distance": "70 km",
+        "route_duration": "1 h Autofahrt",
+        "route_transit": "1 h 15 Min. mit ÖPNV",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Entwicklung KI-Komponenten für Maschinenbau-Plattform, CAD/PLM/ERP Integration, Agenten-Architektur.",
+        "required_qualifications": [
+            "Machine Learning / Deep Learning",
+            "LLM & Retrieval",
+            "Agent Architecture",
+            "CAD/PLM/ERP Integration",
+            "Evaluation & Testing"
+        ],
+        "url": "https://www.linkedin.com/jobs/view/4476428842"
     }
 ]
