@@ -75,12 +75,11 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
         print(f"❌ KRITISCHER FEHLER beim Laden des Lebenslaufs: {e}")
         sys.exit(1)
 
-# 4. Job-Abfrage über den stabilen Python Apify-Client (Mit erweiterten Filtern)
-async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, test_mode: bool = False) -> Dict[str, Any]:
+# 4. Job-Abfrage über den stabilen Python Apify-Client (Unterstützt das Sourcing-Limit)
+async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]:
     distance_miles = int(distance_km * 0.62)
-    limit = 4 if test_mode else 50
     
-    print(f"🔌 [TEST_MODE={test_mode}] Rufe aktuelle Jobs (Limit: {limit}) für {search_titles} im Umkreis von {distance_km} km um '{location}' ab...")
+    print(f"🔌 Rufe aktuelle Jobs (Sourcing-Limit: {fetch_limit}) für {search_titles} im Umkreis von {distance_km} km um '{location}' ab...")
     token = os.getenv("APIFY_API_TOKEN")
     if not token:
         print("❌ KRITISCHER FEHLER: APIFY_API_TOKEN nicht in Secrets hinterlegt!")
@@ -92,7 +91,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             "titles": search_titles,      
             "locations": [location],       
             "distance": distance_miles,    
-            "limit": limit,                   
+            "limit": fetch_limit,
             "publishedAt": "r604800", # Letzte 7 Tage
             "enrichCompany": True,
             "jobType": ["full-time", "part-time", "contract"],
@@ -116,12 +115,13 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 if search_totals_record and "value" in search_totals_record:
                     linkedin_search_totals = str(search_totals_record["value"])
                     break
+                import time
                 time.sleep(1.5)
         except Exception:
             pass
         
         jobs = []
-        for item in dataset_items[:limit]:
+        for item in dataset_items[:fetch_limit]:
             jobs.append({
                 "title": item.get("title", item.get("job_title", "Kein Titel")),
                 "company": item.get("companyName", item.get("company", "Unbekannte Firma")),
@@ -217,7 +217,8 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #1e3a8a; margin-bottom: 20px;">
                 📊 <b>Echtzeit-Stellenmarkt-Statistik für dich:</b><br>
                 • Insgesamt passende Stellen auf LinkedIn vorhanden: <b>{linkedin_total if not test_mode else 'Inaktiv (im Testmodus)'}</b><br>
-                • Davon in diesem Lauf neu hinzugekommen: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
+                • Davon für diesen Bericht live von LinkedIn geladen: <b>{scraped_total}</b><br>
+                • Neu hinzugekommene und analysierte Treffer: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
                 • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b>
             </div>
     """
@@ -287,95 +288,35 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
 # 7. Haupt-Orchestrator
 async def main():
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
-
+    
+    # 💡 DIE NEUEN DYNAMISCHEN LIMITS (GETRENNT FÜR SOURCING UND KI-ANALYSE)
+    # Sourcing: Wie viele Stellen live auf LinkedIn abgefragt werden.
+    FETCH_LIMIT = 4 if test_mode else 100
+    # KI-Analyse: Wie viele der neu gefundenen Stellen maximal von Groq analysiert werden.
+    ANALYZE_LIMIT = 1 if test_mode else 25
+    
     # A. Strikte PDF-Extraktion am Anfang
     user_profile = extract_profile_from_pdf("lebenslauf.pdf")
-
-    # B. Verlauf laden (historische analysierte Jobs)
+    
+    # B. Verlauf laden
     history_data = load_history()
-
+    
     # C. Wunschtitel
     WUNSCH_TITEL = [
-        "Data Scientist",
-        "AI Engineer",
+        "Data Scientist", 
+        "AI Engineer", 
         "Entwickler Regelungsfunktionen",
         "Python Backend Developer"
     ]
-
-    # D. Aktuelle Live-Stellen von LinkedIn abrufen
+    
+    # D. Aktuelle Live-Stellen mit FETCH_LIMIT abrufen
     scraper_result = await fetch_jobs_via_apify(
-        search_titles=WUNSCH_TITEL,
-        location=MY_HOME_LOCATION,
+        search_titles=WUNSCH_TITEL, 
+        location=MY_HOME_LOCATION, 
         distance_km=30,
-        test_mode=test_mode
+        fetch_limit=FETCH_LIMIT
     )
-
+    
     raw_jobs = scraper_result["jobs"]
     linkedin_total = scraper_result["linkedin_total"]
-    scraped_total = scraper_result["scraped_total"]
-
-    if not raw_jobs:
-        print("❌ Keine Jobs empfangen. Breche ab.")
-        sys.exit(1)
-
-    # 💡 E. SÄUBERUNG: Alte Jobs entfernen, die online nicht mehr existieren
-    # Wir erfassen alle aktuell im Netz sichtbaren URLs
-    current_live_urls = {job['url'] for job in raw_jobs}
-
-    # Wir filtern die historische DB: Behalte nur Jobs, die JETZT noch live sind!
-    cleaned_history = [job for job in history_data if job['url'] in current_live_urls]
-    removed_count = len(history_data) - len(cleaned_history)
-
-    if removed_count > 0:
-        print(f"🧹 Säuberung: {removed_count} veraltete/gelöschte Jobs wurden aus der Datenbank entfernt.")
-
-    # 💡 F. DUPLIKATE FILTERN: Nur noch komplett neue URLs der KI vorlegen
-    known_urls = {job['url'] for job in cleaned_history}
-    new_unseen_jobs = [job for job in raw_jobs if job['url'] not in known_urls]
-
-    print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} live gefundenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
-
-    match_chain = create_matching_chain()
-    new_analyzed_jobs = []
-
-    # 💡 G. Nur neue Jobs von der KI analysieren lassen
-    if new_unseen_jobs:
-        print(f"🧠 Starte KI-Abgleich für {len(new_unseen_jobs)} neue Jobs...")
-        for job in new_unseen_jobs:
-            if not test_mode:
-                await asyncio.sleep(1.5)
-
-            try:
-                result = match_chain.invoke({
-                    "profile": user_profile,
-                    "home_location": MY_HOME_LOCATION,
-                    "title": job["title"],
-                    "company": job["company"],
-                    "description": job["description"],
-                    "location": job["location"],
-                    "salary_info": job.get("salary", "N/A"),
-                    "post_info": job.get("postDate", "N/A"),
-                    "url": job["url"]
-                })
-                new_analyzed_jobs.append(result)
-
-            except Exception as e:
-                print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
-    else:
-        print("☕ Keine neuen Jobs gefunden. Überspringe KI-Analyse.")
-
-    # H. Bereinigten Verlauf mit neuen Analysen zusammenführen und abspeichern
-    updated_history = cleaned_history + new_analyzed_jobs
-    save_history(updated_history)
-
-    # I. E-Mail versenden (Neue Jobs erhalten ein "NEU ✨" Badge, bereinigte alte Jobs stehen darunter)
-    send_email_report(
-        new_jobs=new_analyzed_jobs,
-        old_jobs=cleaned_history,
-        linkedin_total=linkedin_total,
-        scraped_total=scraped_total,
-        test_mode=test_mode
-    )
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    scraped_total = scrape
