@@ -63,24 +63,24 @@
         "url": "https://www.linkedin.com/jobs/view/4476428842"
     },
     {
-        "score": 30,
-        "reason": "Geringe Übereinstimmung; Auto 30 Min., ÖPNV 40 Min.",
-        "job_title": "Compliance Ingenieur (m/w/d) - Schwerpunkt Maschinensicherheit",
-        "company": "Woodward L'Orange GmbH",
-        "location": "Stuttgart, Baden-Württemberg, Germany",
-        "route_distance": "20 km",
-        "route_duration": "30 Min. Autofahrt",
-        "route_transit": "40 Min. mit ÖPNV",
-        "salary_source": "N/A",
-        "post_date": "4 days ago",
-        "job_summary": "Compliance Engineer für Maschinensicherheit bei Woodward L'Orange. Verantwortlich für regulatorische Anforderungen und technische Dokumentation.",
+        "score": 70,
+        "reason": "Starke KI-Expertise, aber Pendelzeit >50 Min. Auto 1 h 10 Min, ÖPNV 1 h 15 Min.",
+        "job_title": "(Senior) Data Scientist / AI Engineer GenAI & KI-Agenten (m/w/d)",
+        "company": "Würth Deutschland",
+        "location": "Stadt Heilbronn, Baden-Württemberg, Germany",
+        "route_distance": "100 km",
+        "route_duration": "1 h 10 Min Autofahrt",
+        "route_transit": "1 h 15 Min mit ÖPNV",
+        "salary_source": "Apify",
+        "post_date": "2026-10-09",
+        "job_summary": "Senior Data Scientist/AI Engineer für GenAI-Lösungen im Omnikanal-Vertrieb.",
         "required_qualifications": [
-            "Regulatorische Anforderungen Maschinensicherheit",
-            "Produkt-Compliance",
-            "Technische Dokumentation",
-            "Kenntnisse in Maschinenbau/Automotive",
-            "Erfahrung mit Normen (ISO, IEC)"
+            "Python (NumPy, Pandas, Scikit-Learn)",
+            "Deep Learning (TensorFlow, PyTorch)",
+            "Machine Learning (XGBoost, LightGBM)",
+            "Cloud Platforms (Google Cloud, AWS)",
+            "Data Engineering (SQL, ETL)"
         ],
-        "url": "https://de.linkedin.com/jobs/view/compliance-ingenieur-m-w-d-schwerpunkt-maschinensicherheit-at-woodward-l-orange-gmbh-4476257823?trk=public_jobs_topcard-title"
+        "url": "https://www.linkedin.com/jobs/view/4476849544"
     }
 ]
