@@ -134,7 +134,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             })
             
         scraped_total = len(jobs)
-        
+        print(item) # for testing purposes
         return {
             "jobs": jobs,
             "linkedin_total": linkedin_search_totals,
