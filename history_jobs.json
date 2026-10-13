@@ -19,5 +19,26 @@
             "Experience with AI model deployment"
         ],
         "url": "https://www.linkedin.com/jobs/view/4476849544"
+    },
+    {
+        "score": 80,
+        "reason": "Auto 25 Min., ÖPNV 30 Min. – gut erreichbar.",
+        "job_title": "Dr. rer. nat. Physik / Chemie – Data Science & Machine Learning (m/w/d)",
+        "company": "Professional Scientists GmbH & Co. KG",
+        "location": "Stuttgart Region",
+        "route_distance": "20 km",
+        "route_duration": "25 Min. Autofahrt",
+        "route_transit": "30 Min. mit ÖPNV",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Data Science & Machine Learning role focusing on algorithm development, data analysis, and deep learning for applied research. Collaboration with measurement and software teams is required.",
+        "required_qualifications": [
+            "Machine Learning",
+            "Deep Learning",
+            "Python",
+            "TensorFlow",
+            "PyTorch"
+        ],
+        "url": "https://www.linkedin.com/jobs/view/4475189667"
     }
 ]
