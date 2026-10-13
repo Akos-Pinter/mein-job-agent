@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import asyncio
 import smtplib
 from email.mime.text import MIMEText
@@ -18,10 +19,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
-# 📍 AKTUALISIERTER WOHNORT
+# 📍 IHR WOHNORT
 MY_HOME_LOCATION = "Ditzingen, 71254"
+HISTORY_FILE = "history_jobs.json"
 
-# 1. Pydantic-Struktur (recommended_action vollständig entfernt)
+# 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
     score: int = Field(description="Ein Score von 0 bis 100, wie gut der Job zum Profil passt. Berücksichtige die Fahrzeiten (Auto und ÖPNV) negativ, falls beide über 50 Minuten liegen!")
     reason: str = Field(description="Begründung für die Bewertung (max. 20 Wörter). Erwähne kurz die Erreichbarkeit mit Auto vs. ÖPNV.")
@@ -37,7 +39,27 @@ class JobMatch(BaseModel):
     required_qualifications: List[str] = Field(description="Eine Liste der wichtigsten 3-5 notwendigen Qualifikationen, Fähigkeiten oder Technologien.")
     url: str = Field(description="Die vollständige URL-Adresse zur Bewerbung oder zur Stellenausschreibung.")
 
-# 2. Funktion zum Extrahieren des Profils (Strikter Abbruch)
+# 2. Hilfsfunktionen zum Laden und Speichern der Verlaufsdaten
+def load_history() -> List[Dict[str, Any]]:
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                print(f"📁 Verlauf geladen: {len(data)} bereits analysierte Jobs gefunden.")
+                return data
+        except Exception as e:
+            print(f"⚠️ Fehler beim Laden des Verlaufs: {e}. Starte mit leeren Daten.")
+    return []
+
+def save_history(history_data: List[Dict[str, Any]]):
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history_data, f, ensure_ascii=False, indent=4)
+        print(f"💾 Verlauf erfolgreich aktualisiert ({len(history_data)} Jobs in {HISTORY_FILE} gesichert).")
+    except Exception as e:
+        print(f"❌ Fehler beim Schreiben der Verlaufsdatei: {e}")
+
+# 3. Funktion zum Extrahieren des Profils (Strikter Abbruch)
 def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
     print(f"📄 Extrahiere Profil aus lokaler Datei '{pdf_path}'...")
     try:
@@ -51,10 +73,9 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
         return text
     except Exception as e:
         print(f"❌ KRITISCHER FEHLER beim Laden des Lebenslaufs: {e}")
-        print("🛑 Der Suchlauf wird abgebrochen, da kein gültiger Lebenslauf vorliegt.")
         sys.exit(1)
 
-# 3. Job-Abfrage über den stabilen Python Apify-Client (Mit erweiterten Filtern)
+# 4. Job-Abfrage über den stabilen Python Apify-Client (Mit erweiterten Filtern)
 async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, test_mode: bool = False) -> Dict[str, Any]:
     distance_miles = int(distance_km * 0.62)
     limit = 4 if test_mode else 50
@@ -74,16 +95,8 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             "limit": limit,                   
             "publishedAt": "r604800", # Letzte 7 Tage
             "enrichCompany": True,
-            "jobType": [
-                "full-time",
-                "part-time",
-                "contract"
-            ],
-            "experienceLevel": [
-                "entry",
-                "associate",
-                "mid-senior"
-            ]
+            "jobType": ["full-time", "part-time", "contract"],
+            "experienceLevel": ["entry", "associate", "mid-senior"]
         }
         
         print(f"📥 Starte den LinkedIn-Scraper-Task...")
@@ -97,20 +110,15 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         linkedin_search_totals = "Unbekannt"
         try:
             kvs = client.key_value_store(run["defaultKeyValueStoreId"])
-
-            # Wir versuchen bis zu 3 Mal im Abstand von 1,5 Sekunden,
-            # den Wert zu laden, um dem Apify-Server Zeit zum Schreiben zu geben.
-            for attempt in range(3):
+            # Wir warten bis zu 3 Sek für asynchrone Metadaten
+            for _ in range(2):
                 search_totals_record = kvs.get_record("SEARCH_TOTALS")
                 if search_totals_record and "value" in search_totals_record:
                     linkedin_search_totals = str(search_totals_record["value"])
-                    break # Erfolgreich ausgelesen!
-                print("⏳ Warte auf die Bereitstellung der LinkedIn-Statistiken...")
-                import time
+                    break
                 time.sleep(1.5)
-
-        except Exception as e:
-            print(f"⚠️ Statistiken konnten nicht geladen werden: {e}")
+        except Exception:
+            pass
         
         jobs = []
         for item in dataset_items[:limit]:
@@ -123,12 +131,9 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 "salary": item.get("salary", item.get("salarySource", "N/A")),
                 "postDate": item.get("postDate", item.get("postedAt", "N/A"))
             })
+            
         scraped_total = len(jobs)
-
-        print(f"📊 --- STATISTIK ---")
-        print(f"🌍 LinkedIn Gesamt-Treffer: {linkedin_search_totals}")
-        print(f"📥 Scraper Importiert: {scraped_total}")
-        print(f"--------------------")
+        
         return {
             "jobs": jobs,
             "linkedin_total": linkedin_search_totals,
@@ -139,7 +144,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         print(f"❌ KRITISCHER FEHLER beim Job-Abruf über Apify: {e}")
         sys.exit(1)
 
-# 4. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
+# 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
     llm = ChatGroq(
@@ -162,8 +167,8 @@ def create_matching_chain():
     prompt = prompt.partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
 
-# 5. E-Mail Versendungsfunktion (HTML - Badge & empfohlenen Handlungsteil entfernt)
-def send_email_report(jobs_list: List[Dict[str, Any]], linkedin_total: str, scraped_total: int, test_mode: bool = False):
+# 6. E-Mail Versendungsfunktion (HTML) mit Berücksichtigung von alten und neuen Jobs
+def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, Any]], linkedin_total: str, scraped_total: int, test_mode: bool = False):
     sender_email = os.getenv("EMAIL_SENDER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     receiver_email = os.getenv("EMAIL_RECEIVER")
@@ -174,7 +179,12 @@ def send_email_report(jobs_list: List[Dict[str, Any]], linkedin_total: str, scra
 
     msg = MIMEMultipart("alternative")
     subject_prefix = "[TEST-RUN] " if test_mode else ""
-    msg["Subject"] = f"🎯 {subject_prefix}Dein täglicher Job-Agent: {len(jobs_list)} neue Matches"
+    
+    # Gesamte Jobliste zusammenführen (Neue zuerst, sortiert nach Score)
+    full_jobs_list = new_jobs + old_jobs
+    full_jobs_list.sort(key=lambda x: x.get('score', 0), reverse=True)
+
+    msg["Subject"] = f"🎯 {subject_prefix}Dein Job-Agent: {len(new_jobs)} neue | {len(full_jobs_list)} Gesamt-Matches"
     msg["From"] = f"Dein AI-Job-Agent <{sender_email}>"
     msg["To"] = receiver_email
 
@@ -185,7 +195,8 @@ def send_email_report(jobs_list: List[Dict[str, Any]], linkedin_total: str, scra
             body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; }}
             .container {{ max-width: 600px; margin: 20px auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }}
             h2 {{ color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }}
-            .job-card {{ background: #fdfdfd; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin-bottom: 20px; }}
+            .job-card {{ background: #fdfdfd; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin-bottom: 20px; position: relative; }}
+            .new-badge {{ position: absolute; top: 15px; left: 15px; background-color: #ef4444; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }}
             .score {{ font-size: 18px; font-weight: bold; float: right; }}
             .section-title {{ font-weight: bold; color: #1f2937; margin-top: 12px; margin-bottom: 4px; font-size: 13px; text-transform: uppercase; }}
             .summary-text {{ color: #4b5563; font-size: 14px; margin-top: 2px; margin-bottom: 10px; }}
@@ -205,18 +216,23 @@ def send_email_report(jobs_list: List[Dict[str, Any]], linkedin_total: str, scra
             
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #1e3a8a; margin-bottom: 20px;">
                 📊 <b>Echtzeit-Stellenmarkt-Statistik für dich:</b><br>
-                • Insgesamt passende Stellen auf LinkedIn vorhanden: <b>{linkedin_total}</b><br>
-                • Davon für diesen Bericht heruntergeladen und analysiert: <b>{scraped_total}</b> (dein Limit: {'4 (Testmodus)' if test_mode else '50'})
+                • Insgesamt passende Stellen auf LinkedIn vorhanden: <b>{linkedin_total if not test_mode else 'Inaktiv (im Testmodus)'}</b><br>
+                • Davon in diesem Lauf neu hinzugekommen: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
+                • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b>
             </div>
     """
 
-    for job in jobs_list:
+    for job in full_jobs_list:
         score = job['score']
         qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
+        
+        # Flaggen, ob es sich um einen neuen Job aus diesem Durchlauf handelt [source: 5]
+        is_new = any(nj['url'] == job['url'] for nj in new_jobs)
+        new_badge_html = '<span class="new-badge">NEU ✨</span><br><br>' if is_new else ''
 
-        # Badge-Generierung & Recommended Action sind hier vollständig aus dem HTML-Template entfernt!
         html_template += f"""
             <div class="job-card">
+                {new_badge_html}
                 <span class="score" style="color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}">{score}% Match</span>
                 <strong style="font-size: 17px;">{job['job_title']}</strong><br>
                 <span style="color: #4b5563; font-size: 14px;">{job['company']}</span><br>
@@ -268,14 +284,17 @@ def send_email_report(jobs_list: List[Dict[str, Any]], linkedin_total: str, scra
     except Exception as e:
         print(f"❌ Fehler beim E-Mail-Versand: {e}")
 
-# 6. Haupt-Orchestrator
+# 7. Haupt-Orchestrator
 async def main():
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
     
     # A. Strikte PDF-Extraktion am Anfang
     user_profile = extract_profile_from_pdf("lebenslauf.pdf")
     
-    # B. Wunschtitel
+    # B. Verlauf laden (historische analysierte Jobs) [source: 3]
+    history_data = load_history()
+    
+    # C. Wunschtitel
     WUNSCH_TITEL = [
         "Data Scientist", 
         "AI Engineer", 
@@ -283,7 +302,7 @@ async def main():
         "Python Backend Developer"
     ]
     
-    # C. Jobs abrufen (Schnittstellen-Daten werden als Dict geliefert)
+    # D. Aktuelle Stellen abrufen
     scraper_result = await fetch_jobs_via_apify(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
@@ -299,37 +318,54 @@ async def main():
         print("❌ Keine Jobs empfangen. Breche ab.")
         sys.exit(1)
 
-    match_chain = create_matching_chain()
-    analyzed_jobs = []
-
-    print("\n🧠 Starte KI-Abgleich und geografische Pendel-Analyse...")
-    for job in raw_jobs:
-        if not test_mode:
-            await asyncio.sleep(1.5)
-        
-        try:
-            result = match_chain.invoke({
-                "profile": user_profile,
-                "home_location": MY_HOME_LOCATION,
-                "title": job["title"],
-                "company": job["company"],
-                "description": job["description"],
-                "location": job["location"],
-                "salary_info": job.get("salary", "N/A"),
-                "post_info": job.get("postDate", "N/A"),
-                "url": job["url"]
-            })
-            analyzed_jobs.append(result)
-            
-        except Exception as e:
-            print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
-
-    analyzed_jobs.sort(key=lambda x: x['score'], reverse=True)
+    # 💡 E. DUPLIKATE FILTERN: Nur noch unbekannte URLs der KI vorlegen [source: 5]
+    known_urls = {job['url'] for job in history_data}
+    new_unseen_jobs = [job for job in raw_jobs if job['url'] not in known_urls]
     
+    print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} abgerufenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
+
+    match_chain = create_matching_chain()
+    new_analyzed_jobs = []
+
+    # 💡 F. Nur noch die neuen Jobs von der KI analysieren lassen!
+    if new_unseen_jobs:
+        print(f"🧠 Starte KI-Abgleich für {len(new_unseen_jobs)} neue Jobs...")
+        for job in new_unseen_jobs:
+            if not test_mode:
+                await asyncio.sleep(1.5)
+            
+            try:
+                result = match_chain.invoke({
+                    "profile": user_profile,
+                    "home_location": MY_HOME_LOCATION,
+                    "title": job["title"],
+                    "company": job["company"],
+                    "description": job["description"],
+                    "location": job["location"],
+                    "salary_info": job.get("salary", "N/A"),
+                    "post_info": job.get("postDate", "N/A"),
+                    "url": job["url"]
+                })
+                new_analyzed_jobs.append(result)
+                
+            except Exception as e:
+                print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
+    else:
+        print("☕ Keine neuen Jobs gefunden. Überspringe KI-Analyse.")
+
+    # G. Neue Analysen in die Verlaufsdatenbank einpflegen [source: 8]
+    updated_history = history_data + new_analyzed_jobs
+    
+    # Verlauf abspeichern
+    save_history(updated_history)
+
+    # H. E-Mail mit zusammengesetztem Gesamtportfolio senden [source: 8]
+    # (Wir übergeben neue Jobs separat, damit sie in der E-Mail ein schönes "NEU ✨" Badge erhalten)
     send_email_report(
-        jobs_list=analyzed_jobs, 
-        linkedin_total=linkedin_total, 
-        scraped_total=scraped_total, 
+        new_jobs=new_analyzed_jobs,
+        old_jobs=history_data,
+        linkedin_total=linkedin_total,
+        scraped_total=scraped_total,
         test_mode=test_mode
     )
 
