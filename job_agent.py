@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 # 📍 IHR WOHNORT
 MY_HOME_LOCATION = "Ditzingen, 71254"
 HISTORY_FILE = "history_jobs.json"
+RAW_JOBS_FILE = "raw_jobs.json"
 
 # 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
@@ -51,13 +52,13 @@ def load_history() -> List[Dict[str, Any]]:
             print(f"⚠️ Fehler beim Laden des Verlaufs: {e}. Starte mit leeren Daten.")
     return []
 
-def save_history(history_data: List[Dict[str, Any]]):
+def save_json_file(data: List[Dict[str, Any]], filepath: str):
     try:
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(history_data, f, ensure_ascii=False, indent=4)
-        print(f"💾 Verlauf erfolgreich aktualisiert ({len(history_data)} Jobs in {HISTORY_FILE} gesichert).")
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        print(f"💾 Datei erfolgreich aktualisiert: '{filepath}' ({len(data)} Einträge gesichert).")
     except Exception as e:
-        print(f"❌ Fehler beim Schreiben der Verlaufsdatei: {e}")
+        print(f"❌ Fehler beim Schreiben der Datei '{filepath}': {e}")
 
 # 3. Funktion zum Extrahieren des Profils (Strikter Abbruch)
 def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
@@ -324,6 +325,7 @@ async def main():
     if not raw_jobs:
         print("❌ Keine Jobs empfangen. Breche ab.")
         sys.exit(1)
+    save_json_file(raw_jobs, RAW_JOBS_FILE)
 
     # E. SÄUBERUNG: Alte Jobs entfernen, die online nicht mehr existieren
     current_live_urls = {job['url'] for job in raw_jobs}
@@ -377,7 +379,7 @@ async def main():
 
     # I. Bereinigten Verlauf mit neuen Analysen zusammenführen und abspeichern
     updated_history = cleaned_history + new_analyzed_jobs
-    save_history(updated_history)
+    save_json_file(updated_history, HISTORY_FILE)
 
     # J. E-Mail versenden (Zusammenführung alte + neue Jobs)
     send_email_report(
