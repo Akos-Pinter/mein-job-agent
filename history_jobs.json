@@ -40,5 +40,26 @@
             "PyTorch"
         ],
         "url": "https://www.linkedin.com/jobs/view/4475189667"
+    },
+    {
+        "score": 70,
+        "reason": "Gute Fachkenntnisse, aber Pendelzeit >50 Min. Auto/ÖPNV.",
+        "job_title": "(Senior) Data Scientist / AI Engineer GenAI & KI-Agenten",
+        "company": "Würth Deutschland",
+        "location": "Heilbronn, Baden-Württemberg, Germany",
+        "route_distance": "70 km",
+        "route_duration": "70 Min. Autofahrt",
+        "route_transit": "90 Min. mit ÖPNV",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Senior Data Scientist/AI Engineer für GenAI-Lösungen bei Würth. Verantwortlich für Entwicklung, Integration und Betrieb von KI-Anwendungen.",
+        "required_qualifications": [
+            "Machine Learning & Deep Learning",
+            "Python & Data Engineering",
+            "GenAI & Multiagentensysteme",
+            "Cloud Services (AWS/GCP)",
+            "Projektmanagement & Teamführung"
+        ],
+        "url": "https://www.linkedin.com/jobs/view/4476050981"
     }
 ]
