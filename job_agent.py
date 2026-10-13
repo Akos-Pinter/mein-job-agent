@@ -143,7 +143,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             "titles": search_titles,
             "locations": [location],
             "distance": distance_miles,
-            "limit": 50,
+            "limit": 5,
             "publishedAt": "r604800" # Technischer Code für 'Letzte 7 Tage' (past 7 days)
         }
 
@@ -333,7 +333,7 @@ async def main():
 
     match_chain = create_matching_chain()
     analyzed_jobs = []
-
+    
     print("\n🧠 Berechne Arbeitswege (Auto & ÖPNV) und starte KI-Abgleich...")
     for job in raw_jobs:
         await asyncio.sleep(1.5) # Wartet 1,5 Sek. vor jedem KI-Aufruf
@@ -349,35 +349,39 @@ async def main():
                 if route_data:
                     distance_str = f"{route_data[0]} km"
                     duration_str = f"{route_data} Minuten"
+        print(home_coords)
+        print(job_coords)
+        print(distance_str)
+        print(duration_str)
         
         # 2. ÖPNV-Routenberechnung über DB HAFAS Schnittstelle
         if MY_HOME_LOCATION and job["location"] != "N/A":
             transit_str = calculate_transit_hafas(MY_HOME_LOCATION, job["location"])
             
-        try:
-            result = match_chain.invoke({
-                "profile": user_profile,
-                "title": job["title"],
-                "company": job["company"],
-                "description": job["description"],
-                "location": job["location"],
-                "distance_info": distance_str,
-                "duration_info": duration_str,
-                "transit_info": transit_str,
-                "url": job["url"]
-            })
+    #     try:
+    #         result = match_chain.invoke({
+    #             "profile": user_profile,
+    #             "title": job["title"],
+    #             "company": job["company"],
+    #             "description": job["description"],
+    #             "location": job["location"],
+    #             "distance_info": distance_str,
+    #             "duration_info": duration_str,
+    #             "transit_info": transit_str,
+    #             "url": job["url"]
+    #         })
             
-            result["route_distance"] = distance_str
-            result["route_duration"] = duration_str
-            result["route_transit"] = transit_str
-            analyzed_jobs.append(result)
+    #         result["route_distance"] = distance_str
+    #         result["route_duration"] = duration_str
+    #         result["route_transit"] = transit_str
+    #         analyzed_jobs.append(result)
             
-        except Exception as e:
-            print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
+    #     except Exception as e:
+    #         print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
 
-    # Nach Score sortieren (Beste Matches zuerst)
-    analyzed_jobs.sort(key=lambda x: x['score'], reverse=True)
-    send_email_report(analyzed_jobs)
+    # # Nach Score sortieren (Beste Matches zuerst)
+    # analyzed_jobs.sort(key=lambda x: x['score'], reverse=True)
+    # send_email_report(analyzed_jobs)
 
 if __name__ == "__main__":
     asyncio.run(main())
