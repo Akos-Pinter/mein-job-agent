@@ -19,5 +19,26 @@
             "Experience with AI model deployment"
         ],
         "url": "https://www.linkedin.com/jobs/view/4476849544"
+    },
+    {
+        "score": 70,
+        "reason": "Starke Automobilsoftware-Erfahrung, OBD nicht explizit, Pendelzeit kurz.",
+        "job_title": "Entwicklungsingenieur E/E Schwerpunkt Diagnose (OBD)",
+        "company": "prognum Automotive GmbH",
+        "location": "Stuttgart",
+        "route_distance": "20 km",
+        "route_duration": "25 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Entwicklungsingenieur für On-Board-Diagnose (OBD) in Stuttgart.",
+        "required_qualifications": [
+            "Kenntnisse in On-Board-Diagnose (OBD)",
+            "Softwareentwicklung in Automotive",
+            "System- und Integrationstests",
+            "Dokumentation",
+            "Kenntnis von Fahrzeugregulierungen"
+        ],
+        "url": "https://de.linkedin.com/jobs/view/entwicklungsingenieur-e-e-schwerpunkt-diagnose-obd-m-w-d-at-prognum-automotive-gmbh-4478391638?trk=public_jobs_topcard-title"
     }
 ]
