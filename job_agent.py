@@ -99,7 +99,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         }
         
         print(f"📥 Starte den LinkedIn-Scraper-Task...")
-        run = client.actor("bebity/linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=180)
+        run = client.actor("bebity/linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=300)
         
         print("📦 Lade strukturierte Ergebnisse herunter...")
         dataset = client.dataset(run["defaultDatasetId"])
@@ -121,7 +121,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             pass
         
         jobs = []
-        for item in dataset_items[:fetch_limit]:
+        for item in dataset_items:
             jobs.append({
                 "title": item.get("title", item.get("job_title", "Kein Titel")),
                 "company": item.get("companyName", item.get("company", "Unbekannte Firma")),
@@ -291,7 +291,7 @@ async def main():
     
     # 💡 DIE NEUEN DYNAMISCHEN LIMITS (GETRENNT FÜR SOURCING UND KI-ANALYSE)
     # Sourcing: Wie viele Stellen live auf LinkedIn abgefragt werden.
-    FETCH_LIMIT = 200
+    FETCH_LIMIT = 100
     # KI-Analyse: Wie viele der neu gefundenen Stellen maximal von Groq analysiert werden.
     ANALYZE_LIMIT = 1 if test_mode else 25
     
