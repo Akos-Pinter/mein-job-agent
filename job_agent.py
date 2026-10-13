@@ -130,7 +130,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 "location": item.get("location", "N/A"),
                 "url": item.get("url", item.get("jobUrl", "https://linkedin.com")),
                 "salary": item.get("salary", item.get("salarySource", "N/A")),
-                "postDate": item.get("postedTime", item.get("publishedAt", "N/A"))
+                "postDate": item.get("publishedAt", item.get("postedTime", "N/A"))
             })
             
         scraped_total = len(jobs)
