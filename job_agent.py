@@ -226,7 +226,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
         score = job['score']
         qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
         
-        # Flaggen, ob es sich um einen neuen Job aus diesem Durchlauf handelt [source: 5]
+        # Flaggen, ob es sich um einen neuen Job aus diesem Durchlauf handelt
         is_new = any(nj['url'] == job['url'] for nj in new_jobs)
         new_badge_html = '<span class="new-badge">NEU ✨</span><br><br>' if is_new else ''
 
@@ -287,53 +287,64 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
 # 7. Haupt-Orchestrator
 async def main():
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
-    
+
     # A. Strikte PDF-Extraktion am Anfang
     user_profile = extract_profile_from_pdf("lebenslauf.pdf")
-    
-    # B. Verlauf laden (historische analysierte Jobs) [source: 3]
+
+    # B. Verlauf laden (historische analysierte Jobs)
     history_data = load_history()
-    
+
     # C. Wunschtitel
     WUNSCH_TITEL = [
-        "Data Scientist", 
-        "AI Engineer", 
+        "Data Scientist",
+        "AI Engineer",
         "Entwickler Regelungsfunktionen",
         "Python Backend Developer"
     ]
-    
-    # D. Aktuelle Stellen abrufen
+
+    # D. Aktuelle Live-Stellen von LinkedIn abrufen
     scraper_result = await fetch_jobs_via_apify(
-        search_titles=WUNSCH_TITEL, 
-        location=MY_HOME_LOCATION, 
+        search_titles=WUNSCH_TITEL,
+        location=MY_HOME_LOCATION,
         distance_km=30,
         test_mode=test_mode
     )
-    
+
     raw_jobs = scraper_result["jobs"]
     linkedin_total = scraper_result["linkedin_total"]
     scraped_total = scraper_result["scraped_total"]
-    
+
     if not raw_jobs:
         print("❌ Keine Jobs empfangen. Breche ab.")
         sys.exit(1)
 
-    # 💡 E. DUPLIKATE FILTERN: Nur noch unbekannte URLs der KI vorlegen [source: 5]
-    known_urls = {job['url'] for job in history_data}
+    # 💡 E. SÄUBERUNG: Alte Jobs entfernen, die online nicht mehr existieren
+    # Wir erfassen alle aktuell im Netz sichtbaren URLs
+    current_live_urls = {job['url'] for job in raw_jobs}
+
+    # Wir filtern die historische DB: Behalte nur Jobs, die JETZT noch live sind!
+    cleaned_history = [job for job in history_data if job['url'] in current_live_urls]
+    removed_count = len(history_data) - len(cleaned_history)
+
+    if removed_count > 0:
+        print(f"🧹 Säuberung: {removed_count} veraltete/gelöschte Jobs wurden aus der Datenbank entfernt.")
+
+    # 💡 F. DUPLIKATE FILTERN: Nur noch komplett neue URLs der KI vorlegen
+    known_urls = {job['url'] for job in cleaned_history}
     new_unseen_jobs = [job for job in raw_jobs if job['url'] not in known_urls]
-    
-    print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} abgerufenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
+
+    print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} live gefundenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
 
     match_chain = create_matching_chain()
     new_analyzed_jobs = []
 
-    # 💡 F. Nur noch die neuen Jobs von der KI analysieren lassen!
+    # 💡 G. Nur neue Jobs von der KI analysieren lassen
     if new_unseen_jobs:
         print(f"🧠 Starte KI-Abgleich für {len(new_unseen_jobs)} neue Jobs...")
         for job in new_unseen_jobs:
             if not test_mode:
                 await asyncio.sleep(1.5)
-            
+
             try:
                 result = match_chain.invoke({
                     "profile": user_profile,
@@ -347,23 +358,20 @@ async def main():
                     "url": job["url"]
                 })
                 new_analyzed_jobs.append(result)
-                
+
             except Exception as e:
                 print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
     else:
         print("☕ Keine neuen Jobs gefunden. Überspringe KI-Analyse.")
 
-    # G. Neue Analysen in die Verlaufsdatenbank einpflegen [source: 8]
-    updated_history = history_data + new_analyzed_jobs
-    
-    # Verlauf abspeichern
+    # H. Bereinigten Verlauf mit neuen Analysen zusammenführen und abspeichern
+    updated_history = cleaned_history + new_analyzed_jobs
     save_history(updated_history)
 
-    # H. E-Mail mit zusammengesetztem Gesamtportfolio senden [source: 8]
-    # (Wir übergeben neue Jobs separat, damit sie in der E-Mail ein schönes "NEU ✨" Badge erhalten)
+    # I. E-Mail versenden (Neue Jobs erhalten ein "NEU ✨" Badge, bereinigte alte Jobs stehen darunter)
     send_email_report(
         new_jobs=new_analyzed_jobs,
-        old_jobs=history_data,
+        old_jobs=cleaned_history,
         linkedin_total=linkedin_total,
         scraped_total=scraped_total,
         test_mode=test_mode
