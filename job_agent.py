@@ -319,4 +319,74 @@ async def main():
     
     raw_jobs = scraper_result["jobs"]
     linkedin_total = scraper_result["linkedin_total"]
-    scraped_total = scrape
+    scraped_total = scraper_result["scraped_total"]
+    
+    if not raw_jobs:
+        print("❌ Keine Jobs empfangen. Breche ab.")
+        sys.exit(1)
+
+    # E. SÄUBERUNG: Alte Jobs entfernen, die online nicht mehr existieren
+    current_live_urls = {job['url'] for job in raw_jobs}
+    cleaned_history = [job for job in history_data if job['url'] in current_live_urls]
+    removed_count = len(history_data) - len(cleaned_history)
+    
+    if removed_count > 0:
+        print(f"🧹 Säuberung: {removed_count} veraltete/gelöschte Jobs wurden aus der Datenbank entfernt.")
+
+    # F. DUPLIKATE FILTERN: Nur neue URLs erfassen
+    known_urls = {job['url'] for job in cleaned_history}
+    new_unseen_jobs = [job for job in raw_jobs if job['url'] not in known_urls]
+    
+    print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} live gefundenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
+
+    # 💡 G. KI-LIMITIERUNG ANWENDEN (Schnittstelle begrenzen)
+    # Wir begrenzen die neuen Stellen für die Groq-Analyse auf das ANALYZE_LIMIT
+    jobs_to_analyze = new_unseen_jobs[:ANALYZE_LIMIT]
+    
+    if new_unseen_jobs and len(new_unseen_jobs) > ANALYZE_LIMIT:
+        print(f"⚠️ Limit erreicht: Es gibt {len(new_unseen_jobs)} neue Jobs. Es werden jedoch nur die ersten {ANALYZE_LIMIT} davon heute analysiert, um Ressourcen zu sparen.")
+
+    match_chain = create_matching_chain()
+    new_analyzed_jobs = []
+
+    # H. Nur die begrenzten neuen Jobs durch die KI jagen
+    if jobs_to_analyze:
+        print(f"🧠 Starte KI-Abgleich für {len(jobs_to_analyze)} neue Jobs (Limit: {ANALYZE_LIMIT})...")
+        for job in jobs_to_analyze:
+            if not test_mode:
+                await asyncio.sleep(1.5)
+            
+            try:
+                result = match_chain.invoke({
+                    "profile": user_profile,
+                    "home_location": MY_HOME_LOCATION,
+                    "title": job["title"],
+                    "company": job["company"],
+                    "description": job["description"],
+                    "location": job["location"],
+                    "salary_info": job.get("salary", "N/A"),
+                    "post_info": job.get("postDate", "N/A"),
+                    "url": job["url"]
+                })
+                new_analyzed_jobs.append(result)
+                
+            except Exception as e:
+                print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
+    else:
+        print("☕ Keine neuen Jobs zur Analyse ausstehend.")
+
+    # I. Bereinigten Verlauf mit neuen Analysen zusammenführen und abspeichern
+    updated_history = cleaned_history + new_analyzed_jobs
+    save_history(updated_history)
+
+    # J. E-Mail versenden (Zusammenführung alte + neue Jobs)
+    send_email_report(
+        new_jobs=new_analyzed_jobs,
+        old_jobs=cleaned_history,
+        linkedin_total=linkedin_total,
+        scraped_total=scraped_total,
+        test_mode=test_mode
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
