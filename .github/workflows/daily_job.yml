@@ -9,6 +9,10 @@ jobs:
   run-agent:
     runs-on: ubuntu-latest
 
+    # WICHTIG: Erlaubt dem Workflow, Commits zurückzuschreiben [source: 8]
+    permissions:
+      contents: write
+
     steps:
     - name: Code auschecken
       uses: actions/checkout@v4
@@ -30,6 +34,14 @@ jobs:
         EMAIL_SENDER:  ${{ secrets.EMAIL_SENDER }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
-        TEST_MODE: "true"
+        TEST_MODE: "true" # Zum Testen aktiv lassen, später auf "false" setzen
       run: |
         python job_agent.py
+
+    - name: Verlauf im Repository speichern
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: "💾 Auto-Update: Job-Verlauf aktualisiert [skip ci]"
+        file_pattern: 'history_jobs.json'
+        status_options: '--untracked-files=all'
+        add_options: '-A'
