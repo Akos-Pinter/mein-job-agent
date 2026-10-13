@@ -96,14 +96,22 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         
         scraped_total = len(dataset_items)
         linkedin_search_totals = "Unbekannt"
-        
         try:
             kvs = client.key_value_store(run["defaultKeyValueStoreId"])
-            search_totals_record = kvs.get_record("SEARCH_TOTALS")
-            if search_totals_record and "value" in search_totals_record:
-                linkedin_search_totals = str(search_totals_record["value"])
-        except Exception:
-            pass
+
+            # Wir versuchen bis zu 3 Mal im Abstand von 1,5 Sekunden,
+            # den Wert zu laden, um dem Apify-Server Zeit zum Schreiben zu geben.
+            for attempt in range(3):
+                search_totals_record = kvs.get_record("SEARCH_TOTALS")
+                if search_totals_record and "value" in search_totals_record:
+                    linkedin_search_totals = str(search_totals_record["value"])
+                    break # Erfolgreich ausgelesen!
+                print("⏳ Warte auf die Bereitstellung der LinkedIn-Statistiken...")
+                import time
+                time.sleep(1.5)
+
+        except Exception as e:
+            print(f"⚠️ Statistiken konnten nicht geladen werden: {e}")
         
         print(f"📊 --- STATISTIK ---")
         print(f"🌍 LinkedIn Gesamt-Treffer: {linkedin_search_totals}")
