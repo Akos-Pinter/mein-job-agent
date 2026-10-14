@@ -22,7 +22,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 # 📍 IHR WOHNORT
-MY_HOME_LOCATION = "Ditzingen, Baden-Württemberg, Deutschland"
+MY_HOME_LOCATION = "Ditzingen, Baden-Württemberg, Germany"
 HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
 JOB_LIFETIME_DAYS = 14 
@@ -106,7 +106,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         "query": f"{titles_query} in {location}, {distance_km} km",
 		"country": "de",
         "num_pages": "1",
-        "date_posted": "week",
+        #"date_posted": "week",
 		#"radius": str(distance_km),
 		#"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
 		#"job_requirements": "under_3_years_experience,3_to_7_years_experience"
