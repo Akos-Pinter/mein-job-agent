@@ -106,17 +106,16 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         "query": f"{titles_query} in {location}",
 		"country": "de",
         "num_pages": "1",
-        "date_posted": "week",
 		"radius": str(distance_km),
-		#"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
-		#"job_requirements": "under_3_years_experience,3_to_7_years_experience"
+		"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
+		"job_requirements": "under_3_years_experience,3_to_7_years_experience"
 		}
 	
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
         response_data = response.json()
-        print(response_data)
+        
         raw_items = response_data.get("jobs", [])
         print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
 		
