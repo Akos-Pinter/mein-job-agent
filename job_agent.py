@@ -96,7 +96,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
     }
 	
-	titles_query = " OR ".join(f'"{title}"' for title in search_titles)
+    titles_query = " OR ".join(f'"{title}"' for title in search_titles)
     combined_query = f"({titles_query}) in {location} within {distance_km} km, Full-time, Entry-level OR Mid-Senior"
     params = {
         "query": combined_query,
