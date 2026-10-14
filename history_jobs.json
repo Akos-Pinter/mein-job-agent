@@ -109,6 +109,31 @@
             "Agile/Scrum",
             "Moderne Frameworks"
         ],
-        "url": "https://www.linkedin.com/jobs/view/4476053491"
+        "url": "https://www.linkedin.com/jobs/view/4476053491",
+        "analyzed_at": "2026-10-14"
+    },
+    {
+        "score": 85,
+        "reason": "Auto 30 Min., ÖPNV 45 Min., gute Passung.",
+        "job_title": "Software Entwickler (m/w/d)",
+        "company": "Exyte",
+        "company_employee_count": "200 Mitarbeiter",
+        "location": "Renningen, Baden-Württemberg, Germany",
+        "route_distance": "25 km",
+        "route_duration": "30 Min. Autofahrt",
+        "route_transit": "45 Min. mit ÖPNV",
+        "contract_type": "N/A",
+        "experience_level": "Mid-Senior level",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Softwareentwickler für Präzisionsklimatisierung in Renningen.",
+        "required_qualifications": [
+            "Softwareentwicklung",
+            "State Machines",
+            "API-Entwicklung",
+            "Projektmanagement",
+            "Präzisionsklimatisierung"
+        ],
+        "url": "https://www.linkedin.com/jobs/view/4477838425"
     }
 ]
