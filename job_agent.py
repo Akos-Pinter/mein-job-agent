@@ -27,6 +27,7 @@ HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
 JOB_LIFETIME_DAYS = 14 
 
+
 # 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
     score: int = Field(description="Ein Score von 0 bis 100, wie gut der Job zum Profil passt. Berücksichtige die Fahrzeiten (Auto und ÖPNV) negativ, falls beide über 50 Minuten liegen!")
@@ -46,6 +47,7 @@ class JobMatch(BaseModel):
     required_qualifications: List[str] = Field(description="Eine Liste der wichtigsten 3-5 notwendigen Qualifikationen, Fähigkeiten oder Technologien.")
     url: str = Field(description="Die vollständige URL-Adresse zur Bewerbung oder zur Stellenausschreibung.")
 
+
 # 2. Hilfsfunktionen zum Laden und Speichern der Verlaufsdaten (JSON)
 def load_history() -> List[Dict[str, Any]]:
     if os.path.exists(HISTORY_FILE):
@@ -58,6 +60,7 @@ def load_history() -> List[Dict[str, Any]]:
             print(f"⚠️ Fehler beim Laden des Verlaufs: {e}. Starte mit leeren Daten.")
     return []
 
+
 def save_json_file(data: List[Dict[str, Any]], filepath: str):
     try:
         with open(filepath, "w", encoding="utf-8") as f:
@@ -65,6 +68,7 @@ def save_json_file(data: List[Dict[str, Any]], filepath: str):
         print(f"💾 Datei erfolgreich aktualisiert: '{filepath}' ({len(data)} Einträge gesichert).")
     except Exception as e:
         print(f"❌ Fehler beim Schreiben der Datei '{filepath}': {e}")
+
 
 # 3. Funktion zum Extrahieren des Profils (Strikter Abbruch)
 def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
@@ -82,7 +86,8 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
         print(f"❌ KRITISCHER FEHLER beim Laden des Lebenslaufs: {e}")
         sys.exit(1)
 
-#  4.1 Fallback-Sourcing über RapidAPI JSearch
+
+# 4.1 Fallback-Sourcing über RapidAPI JSearch
 def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30) -> Dict[str, Any]:
     print(f"🔌 ⚙️ [FALLBACK AKTIV] Starte Umkreis-Abfrage ({distance_km} km) über RapidAPI JSearch...")
     api_key = os.getenv("RAPIDAPI_KEY")
@@ -145,6 +150,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
     except Exception as e:
         print(f"❌ KRITISCH: Fallback über JSearch ebenfalls fehlgeschlagen: {e}")
         sys.exit(1)
+
 
 # 4.2 Job-Abfrage über den stabilen Python Apify-Client (Mit automatischem JSearch-Fallback)
 async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]:
@@ -216,8 +222,8 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         
     except Exception as e:
         print(f"⚠️ Apify-Fehler aufgetreten: {e}. Weiche automatisch auf JSearch aus...")
-        # KORRIGIERT: Aufruf ohne fetch_limit
         return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
+
 
 # 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
 def create_matching_chain():
@@ -236,25 +242,21 @@ def create_matching_chain():
                    "Berücksichtige diese Pendelzeit negativ im Match-Score, falls sie zu lang ist.\n{format_instructions}"),
         ("user", "Lebenslauf des Kandidaten:\n{profile}\n\n"
                  "Wohnort des Kandidaten: {home_location}\n\n"
-                 "Jobangebot:\nTitel: {title}\nFirma: {company}\nBeschreibung: {description}\nOrt: {location}\n"
-                 "Gehaltsdaten (Apify): {salary_info}\nVeröffentlicht am/vor (Apify): {post_info}\nURL: {url}")
-		("user", "Lebenslauf des Kandidaten:\n{profile}\n\n"
-		 "Wohnort des Kandidaten: {home_location}\n\n"
-		 "Jobangebot:\n"
-		 "Titel: {title}\n"
-		 "Firma: {company}\n"
-		 "Mitarbeiterzahl: {employee_count}\n"
-		 "Beschreibung: {description}\n"
-		 "Ort: {location}\n"
-		 "Vertragstyp: {contract_type}\n"
-		 "Erfahrungsstufe: {exp_level}\n"
-		 "Gehaltsdaten: {salary_info}\n"
-		 "Veröffentlicht: {post_info}\n"
-		 "URL: {url}"
-		)
-	])
+                 "Jobangebot:\n"
+                 "Titel: {title}\n"
+                 "Firma: {company}\n"
+                 "Mitarbeiterzahl: {employee_count}\n"
+                 "Beschreibung: {description}\n"
+                 "Ort: {location}\n"
+                 "Vertragstyp: {contract_type}\n"
+                 "Erfahrungsstufe: {exp_level}\n"
+                 "Gehaltsdaten: {salary_info}\n"
+                 "Veröffentlicht: {post_info}\n"
+                 "URL: {url}")
+    ])
     prompt = prompt.partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
+
 
 # 6. E-Mail Versendungsfunktion (HTML)
 def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, Any]], linkedin_total: str, scraped_total: int, test_mode: bool = False):
@@ -265,17 +267,14 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
     if not sender_email or not sender_password or not receiver_email:
         print("⚠️ E-Mail-Konfiguration unvollständig. Überspringe Versand.")
         return
-
     msg = MIMEMultipart("alternative")
     subject_prefix = "[TEST-RUN] " if test_mode else ""
     
     full_jobs_list = new_jobs + old_jobs
     full_jobs_list.sort(key=lambda x: x.get('score', 0), reverse=True)
-
     msg["Subject"] = f"🎯 {subject_prefix}Dein Job-Agent: {len(new_jobs)} neue | {len(full_jobs_list)} Gesamt-Matches"
     msg["From"] = f"Dein AI-Job-Agent <{sender_email}>"
     msg["To"] = receiver_email
-
     html_template = f"""
     <html>
     <head>
@@ -310,17 +309,14 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
                 • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b> (Aufbewahrung: {JOB_LIFETIME_DAYS} Tage)
             </div>
     """
-
     for job in full_jobs_list:
         score = job['score']
         qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
         
         is_new = any(nj['url'] == job['url'] for nj in new_jobs)
         new_badge_html = '<span style="background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-right: 8px; display: inline-block; vertical-align: middle; white-space: nowrap;">NEU ✨</span>' if is_new else ''
-
         emp_count = job.get('company_employee_count', 'N/A')
         formatted_company_display = f"{job['company']} ({emp_count})" if emp_count != "N/A" else job['company']
-
         html_template += f"""
             <div class="job-card">
                 
@@ -335,7 +331,6 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
                         </strong>
                     </div>
                     
-                    # Rechte Seite: Match-Score am äußersten Rand
                     <span style="font-size: 18px; font-weight: bold; color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}; text-align: right; white-space: nowrap; margin-left: auto;">
                         {score}% Match
                     </span>
@@ -368,7 +363,6 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
                 <a href="{job.get('url', 'https://linkedin.com')}" target="_blank" class="btn-apply">Anzeige öffnen ➔</a>
             </div>
         """
-
     html_template += f"""
             <div class="footer">
                 Diese E-Mail wurde vollautomatisch über den PDF-Abgleich generiert.<br>
@@ -380,9 +374,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
     </body>
     </html>
     """
-
     msg.attach(MIMEText(html_template, "html"))
-
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(sender_email, sender_password)
@@ -390,6 +382,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
         print("📨 E-Mail-Bericht erfolgreich versendet!")
     except Exception as e:
         print(f"❌ Fehler beim E-Mail-Versand: {e}")
+
 
 # 7. Haupt-Orchestrator
 async def main():
@@ -427,14 +420,13 @@ async def main():
     if not raw_jobs:
         print("❌ Keine Jobs empfangen. Breche ab.")
         sys.exit(1)
-
+        
     # E. Die rohen Sourcing-Ergebnisse abspeichern
     save_json_file(raw_jobs, RAW_JOBS_FILE)
-
+    
     # F. SÄUBERUNGSWEICHE: "Time-to-Live" (TTL) statt Live-Abgleich
     cleaned_history = []
     current_date = datetime.now()
-
     for job in history_data:
         analyzed_at_str = job.get("analyzed_at")
         if analyzed_at_str:
@@ -442,29 +434,29 @@ async def main():
             if current_date - analyzed_date <= timedelta(days=JOB_LIFETIME_DAYS):
                 cleaned_history.append(job)
         else:
-			# Fallback für ganz alte Jobs ohne Zeitstempel (Erhalten einmalig den heutigen Stempel)
+            # Fallback für ganz alte Jobs ohne Zeitstempel (Erhalten einmalig den heutigen Stempel)
             job["analyzed_at"] = current_date.strftime("%Y-%m-%d")
             cleaned_history.append(job)
 		
     removed_count = len(history_data) - len(cleaned_history)
     if removed_count > 0:
         print(f"🧹 TTL-Säuberung: {removed_count} veraltete Jobs (älter als {JOB_LIFETIME_DAYS} Tage) wurden gelöscht.")
-
+        
     # G. DUPLIKATE FILTERN: Nur neue URLs erfassen
     known_urls = {job['url'] for job in cleaned_history}
     new_unseen_jobs = [job for job in raw_jobs if job['url'] not in known_urls]
     
     print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} live gefundenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
-
+    
     # H. KI-LIMITIERUNG ANWENDEN
     jobs_to_analyze = new_unseen_jobs[:ANALYZE_LIMIT]
     
     if new_unseen_jobs and len(new_unseen_jobs) > ANALYZE_LIMIT:
         print(f"⚠️ Limit erreicht: Es gibt {len(new_unseen_jobs)} neue Jobs. Es werden jedoch nur die ersten {ANALYZE_LIMIT} davon heute analysiert, um Ressourcen zu sparen.")
-
+        
     match_chain = create_matching_chain()
     new_analyzed_jobs = []
-
+    
     # I. Nur die begrenzten neuen Jobs durch die KI jagen
     if jobs_to_analyze:
         print(f"🧠 Starte KI-Abgleich für {len(jobs_to_analyze)} neue Jobs (Limit: {ANALYZE_LIMIT})...")
@@ -487,20 +479,20 @@ async def main():
                     "post_info": job.get("postDate", "N/A"),
                     "url": job["url"]
                 })
-				result["analyzed_at"] = current_date.strftime("%Y-%m-%d")
+                result["analyzed_at"] = current_date.strftime("%Y-%m-%d")
                 new_analyzed_jobs.append(result)
                 
             except Exception as e:
                 print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
     else:
         print("☕ Keine neuen Jobs zur Analyse ausstehend.")
-
+        
     # J. Bereinigten Verlauf mit neuen Analysen zusammenführen
     updated_history = cleaned_history + new_analyzed_jobs
     
     # K. Verlauf abspeichern
     save_json_file(updated_history, HISTORY_FILE)
-
+    
     # L. E-Mail versenden (Zusammenführung alte + neue Jobs)
     send_email_report(
         new_jobs=new_analyzed_jobs,
