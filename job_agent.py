@@ -117,7 +117,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         
         jobs = []
         for item in raw_items:
-            # Gehaltsspanne formatieren [source: 4]
+            # Gehaltsspanne formatieren
             min_sal = item.get("job_min_salary")
             max_sal = item.get("job_max_salary")
             currency = item.get("job_salary_currency", "EUR")
@@ -304,19 +304,27 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
         qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
         
         is_new = any(nj['url'] == job['url'] for nj in new_jobs)
-        new_badge_html = '<span class="new-badge">NEU ✨</span><br><br>' if is_new else ''
+        new_badge_html = '<span style="background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-right: 8px; display: inline-block; vertical-align: middle; white-space: nowrap;">NEU ✨</span>' if is_new else ''
 
         emp_count = job.get('company_employee_count', 'N/A')
         formatted_company_display = f"{job['company']} ({emp_count})" if emp_count != "N/A" else job['company']
 
         html_template += f"""
             <div class="job-card">
-                {new_badge_html}
                 
-                <!-- 💡 Titelzeile mit Flexbox für rechtsgerichteten Match-Score -->
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
-                    <strong style="font-size: 17px; color: #1e3a8a; padding-right: 15px;">{job['job_title']}</strong>
-                    <span style="font-size: 18px; font-weight: bold; color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}; white-space: nowrap;">
+                <!-- 💡 Titelzeile mit linksbündigem Titel (inkl. Badge) und rechtsbündigem Match-Score -->
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px;">
+                    
+                    <!-- Linke Seite: NEU-Badge + Jobtitel fließen nahtlos ineinander -->
+                    <div style="display: flex; align-items: center; text-align: left; padding-right: 15px;">
+                        {new_badge_html}
+                        <strong style="font-size: 17px; color: #1e3a8a; vertical-align: middle;">
+                            {job['job_title']}
+                        </strong>
+                    </div>
+                    
+                    # Rechte Seite: Match-Score am äußersten Rand
+                    <span style="font-size: 18px; font-weight: bold; color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}; text-align: right; white-space: nowrap; margin-left: auto;">
                         {score}% Match
                     </span>
                 </div>
