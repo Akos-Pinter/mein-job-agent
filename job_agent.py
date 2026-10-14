@@ -120,7 +120,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         
         raw_items = response_data.get("data", [])
         print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
-        
+        print(raw_items)
         jobs = []
         for item in raw_items:
             # Gehaltsspanne formatieren
