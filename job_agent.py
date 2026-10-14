@@ -22,7 +22,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 # 📍 IHR WOHNORT
-MY_HOME_LOCATION = "Ditzingen, Baden-Württemberg, Germany"
+MY_HOME_LOCATION = "Stuttgart, Baden-Württemberg, Germany"
 HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
 JOB_LIFETIME_DAYS = 14 
