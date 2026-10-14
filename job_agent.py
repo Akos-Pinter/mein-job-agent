@@ -95,16 +95,14 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
     }
-    
-    query_str = f"({' OR '.join(search_titles)})"
+	
+	titles_query = " OR ".join(f'"{title}"' for title in search_titles)
+    combined_query = f"({titles_query}) in {location} within {distance_km} km, Full-time, Entry-level OR Mid-Senior"
     params = {
-        "query": query_str,
-        "location": f"{location}, {distance_km} km", # Google Jobs versteht Radien im Location-String ("Ditzingen, 30 km") perfekt
+        "query": combined_query,
         "page": "1",
         "num_pages": "1",
-        "date_posted": "week", # Letzte 7 Tage
-        "employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
-        "job_requirements": "under_3_years_experience,3_to_7_years_experience" 
+        "date_posted": "week"
     }
     
     try:
