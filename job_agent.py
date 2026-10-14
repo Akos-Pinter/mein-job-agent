@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import asyncio
+import requests
 import smtplib
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
@@ -81,15 +82,84 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
         print(f"❌ KRITISCHER FEHLER beim Laden des Lebenslaufs: {e}")
         sys.exit(1)
 
-# 4. Job-Abfrage über den stabilen Python Apify-Client
+#  4.1 Fallback-Sourcing über RapidAPI JSearch
+def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30) -> Dict[str, Any]:
+    print(f"🔌 ⚙️ [FALLBACK AKTIV] Starte Umkreis-Abfrage ({distance_km} km) über RapidAPI JSearch...")
+    api_key = os.getenv("RAPIDAPI_KEY")
+    if not api_key:
+        print("❌ KRITISCHER FEHLER: RAPIDAPI_KEY nicht in den Secrets hinterlegt! Fallback unmöglich.")
+        sys.exit(1)
+        
+    url = "https://jsearch.p.rapidapi.com/search"
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
+    }
+    
+    query_str = f"({' OR '.join(search_titles)}) in {location}"
+    params = {
+        "query": query_str,
+        "page": "1",
+        "num_pages": "1",
+        "date_posted": "week", # Letzte 7 Tage
+        "radius": str(distance_km),
+        "employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
+        "job_requirements": "under_3_years_experience,3_to_7_years_experience" 
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=15)
+        response_data = response.json()
+        
+        if response_data.get("status") != "OK":
+            raise ValueError(f"JSearch API lieferte Fehler: {response_data}")
+            
+        raw_items = response_data.get("data", [])
+        print(f"📥 JSearch lieferte {len(raw_items)} rohe Treffer im {distance_km}-km-Radius.")
+        
+        jobs = []
+        for item in raw_items:
+            # Gehaltsspanne formatieren [source: 4]
+            min_sal = item.get("job_min_salary")
+            max_sal = item.get("job_max_salary")
+            currency = item.get("job_salary_currency", "EUR")
+            salary_str = f"{min_sal:,} - {max_sal:,} {currency}".replace(",", ".") if min_sal and max_sal else "N/A"
+            
+            # Mapping der Felder zu unserem einheitlichen Format
+            jobs.append({
+                "title": item.get("job_title", "Kein Titel"),
+                "company": item.get("employer_name", "Unbekannte Firma"),
+                "description": item.get("job_description", "")[:1000],
+                "location": f"{item.get('job_city', '')}, {item.get('job_state', '')}".strip(", "),
+                "url": item.get("job_apply_link", item.get("job_google_link", "https://linkedin.com")),
+                "salary": salary_str,
+                "postDate": item.get("job_posted_at_datetime_utc", "N/A")[:10] if item.get("job_posted_at_datetime_utc") else "N/A",
+                "contractType": item.get("job_employment_type", "N/A"),
+                "experienceLevel": "Mid-Senior level" if item.get("job_required_experience", {}).get("required_experience_in_months") else "Entry level",
+                "companyEmployeeCount": "N/A"
+            })
+            
+        scraped_total = len(jobs)
+        
+        return {
+            "jobs": jobs,
+            "linkedin_total": f"ca. {scraped_total} (JSearch)",
+            "scraped_total": scraped_total
+        }
+    except Exception as e:
+        print(f"❌ KRITISCH: Fallback über JSearch ebenfalls fehlgeschlagen: {e}")
+        sys.exit(1)
+
+# 4.2 Job-Abfrage über den stabilen Python Apify-Client (Mit automatischem JSearch-Fallback)
 async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]:
     distance_miles = int(distance_km * 0.62)
     
     print(f"🔌 Rufe aktuelle Jobs (Sourcing-Limit: {fetch_limit}) für {search_titles} im Umkreis von {distance_km} km um '{location}' ab...")
-    token = os.getenv("APIFY_API_TOKEN")
+    token = None #os.getenv("APIFY_API_TOKEN")
+    
     if not token:
-        print("❌ KRITISCHER FEHLER: APIFY_API_TOKEN nicht in Secrets hinterlegt!")
-        sys.exit(1)
+        print("⚠️ APIFY_API_TOKEN nicht gefunden! Weiche direkt auf JSearch-Fallback aus.")
+        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
         
     client = ApifyClient(token)
     try:
@@ -134,7 +204,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 "location": item.get("location", "N/A"),
                 "url": item.get("url", item.get("jobUrl", "https://linkedin.com")),
                 "salary": item.get("salary", item.get("salarySource", "N/A")),
-                "postDate": item.get("publishedAt", item.get("postedTime", "N/A")),
+                "postDate": item.get("postDate", item.get("postedAt", "N/A")),
                 "contractType": item.get("contractType", "N/A"),
                 "experienceLevel": item.get("experienceLevel", "N/A"),
                 "companyEmployeeCount": item.get("companyEmployeeCount", "N/A")
@@ -149,8 +219,9 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         }
         
     except Exception as e:
-        print(f"❌ KRITISCHER FEHLER beim Job-Abruf über Apify: {e}")
-        sys.exit(1)
+        print(f"⚠️ Apify-Fehler aufgetreten: {e}. Weiche automatisch auf JSearch aus...")
+        # KORRIGIERT: Aufruf ohne fetch_limit
+        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
 
 # 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
 def create_matching_chain():
@@ -224,7 +295,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #1e3a8a; margin-bottom: 20px;">
                 📊 <b>Echtzeit-Stellenmarkt-Statistik für dich:</b><br>
                 • Insgesamt passende Stellen auf LinkedIn vorhanden: <b>{linkedin_total if not test_mode else 'Inaktiv (im Testmodus)'}</b><br>
-                • Davon für diesen Bericht live von LinkedIn geladen: <b>{scraped_total}</b><br>
+                • Davon für diesen Bericht live geladen: <b>{scraped_total}</b><br>
                 • Neu hinzugekommene und analysierte Treffer: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
                 • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b> (Aufbewahrung: {JOB_LIFETIME_DAYS} Tage)
             </div>
@@ -237,7 +308,6 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
         is_new = any(nj['url'] == job['url'] for nj in new_jobs)
         new_badge_html = '<span class="new-badge">NEU ✨</span><br><br>' if is_new else ''
 
-        # Firmenmitarbeiteranzahl in runden Klammern hinter dem Firmennamen ausgeben (falls vorhanden)
         emp_count = job.get('company_employee_count', 'N/A')
         formatted_company_display = f"{job['company']} ({emp_count})" if emp_count != "N/A" else job['company']
 
@@ -317,7 +387,7 @@ async def main():
         "Python Backend Developer"
     ]
     
-    # D. Aktuelle Live-Stellen abrufen
+    # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
     scraper_result = await fetch_jobs_via_apify(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
