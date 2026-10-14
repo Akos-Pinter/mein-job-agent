@@ -312,8 +312,15 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
         html_template += f"""
             <div class="job-card">
                 {new_badge_html}
-                <span class="score" style="color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}">{score}% Match</span>
-                <strong style="font-size: 17px;">{job['job_title']}</strong><br>
+                
+                <!-- 💡 Titelzeile mit Flexbox für rechtsgerichteten Match-Score -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+                    <strong style="font-size: 17px; color: #1e3a8a; padding-right: 15px;">{job['job_title']}</strong>
+                    <span style="font-size: 18px; font-weight: bold; color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}; white-space: nowrap;">
+                        {score}% Match
+                    </span>
+                </div>
+                
                 <span style="color: #4b5563; font-size: 14px;">{formatted_company_display}</span><br>
                 <span class="location-text">📍 {job.get('location', 'N/A')}</span><br>
                 
