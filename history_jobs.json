@@ -186,5 +186,30 @@
         ],
         "url": "https://de.indeed.com/viewjob?jk=ca92b5a9bd62df5d",
         "analyzed_at": "2026-10-14"
+    },
+    {
+        "score": 80,
+        "reason": "Starke ML- und Python-Kenntnisse, Auto 35 Min., ÖPNV 50 Min.",
+        "job_title": "Data Scientist (w / m / d)",
+        "company": "Capgemini",
+        "company_employee_count": "N/A",
+        "location": "Winnenden",
+        "route_distance": "38 km",
+        "route_duration": "35 Min. Autofahrt",
+        "route_transit": "50 Min. mit ÖPNV",
+        "contract_type": "Vollzeit",
+        "experience_level": "Entry level",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Data Scientist im Insights & Data-Team, Fokus auf Data Integration, Analytics und AI.",
+        "required_qualifications": [
+            "Python",
+            "Machine Learning",
+            "Data Analytics",
+            "Agile Methoden",
+            "Kommunikationsfähigkeit"
+        ],
+        "url": "https://talents.studysmarter.de/companies/capgemini/data-scientist-w-m-d-5458491/",
+        "analyzed_at": "2026-10-14"
     }
 ]
