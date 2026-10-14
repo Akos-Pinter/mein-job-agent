@@ -104,23 +104,23 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
     titles_query = " OR ".join(f'"{title}"' for title in search_titles)
     params = {
         "query": titles_query,
-	"location": f"{location}, {distance_km} km", # Google Jobs versteht Radien im Location-String ("Ditzingen, 30 km") perfekt
-        "page": "1",
+		"location": f"{location}, {distance_km} km", # Google Jobs versteht Radien im Location-String ("Ditzingen, 30 km") perfekt
+        #"page": "1",
         "num_pages": "1",
-        "date_posted": "week",
-	"radius": str(distance_km),
-	"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
-	"job_requirements": "under_3_years_experience,3_to_7_years_experience"
-    }
-    params = {"query":"developer jobs in chicago","num_pages":"1","country":"us","date_posted":"all"}
+        #"date_posted": "week",
+		#"radius": str(distance_km),
+		#"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
+		#"job_requirements": "under_3_years_experience,3_to_7_years_experience"
+		}
+    #params = {"query":"developer jobs in chicago","num_pages":"1","country":"us","date_posted":"all"}
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
         response_data = response.json()
         
-        raw_items = response_data.get("data", [])
+        raw_items = response_data.get("jobs", [])
         print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
-        print(raw_items)
+		
         jobs = []
         for item in raw_items:
             # Gehaltsspanne formatieren
