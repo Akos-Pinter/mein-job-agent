@@ -353,7 +353,7 @@ async def main():
 		
     removed_count = len(history_data) - len(cleaned_history)
     if removed_count > 0:
-	print(f"🧹 TTL-Säuberung: {removed_count} veraltete Jobs (älter als {JOB_LIFETIME_DAYS} Tage) wurden gelöscht.")
+        print(f"🧹 TTL-Säuberung: {removed_count} veraltete Jobs (älter als {JOB_LIFETIME_DAYS} Tage) wurden gelöscht.")
 
     # G. DUPLIKATE FILTERN: Nur neue URLs erfassen
     known_urls = {job['url'] for job in cleaned_history}
