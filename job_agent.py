@@ -109,13 +109,11 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
     
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
+        response.raise_for_status()
         response_data = response.json()
         
-        if response_data.get("status") != "OK":
-            raise ValueError(f"JSearch API lieferte Fehler: {response_data}")
-            
         raw_items = response_data.get("data", [])
-        print(f"📥 JSearch lieferte {len(raw_items)} rohe Treffer im {distance_km}-km-Radius.")
+        print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
         
         jobs = []
         for item in raw_items:
@@ -134,7 +132,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
                 "url": item.get("job_apply_link", item.get("job_google_link", "https://linkedin.com")),
                 "salary": salary_str,
                 "postDate": item.get("job_posted_at_datetime_utc", "N/A")[:10] if item.get("job_posted_at_datetime_utc") else "N/A",
-                "contractType": item.get("job_employment_type", "N/A"),
+                "contractType": "Full-time" if item.get("job_employment_type") == "FULLTIME" else item.get("job_employment_type", "N/A"),
                 "experienceLevel": "Mid-Senior level" if item.get("job_required_experience", {}).get("required_experience_in_months") else "Entry level",
                 "companyEmployeeCount": "N/A"
             })
@@ -155,7 +153,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
     distance_miles = int(distance_km * 0.62)
     
     print(f"🔌 Rufe aktuelle Jobs (Sourcing-Limit: {fetch_limit}) für {search_titles} im Umkreis von {distance_km} km um '{location}' ab...")
-    token = None #os.getenv("APIFY_API_TOKEN")
+    token = os.getenv("APIFY_API_TOKEN")
     
     if not token:
         print("⚠️ APIFY_API_TOKEN nicht gefunden! Weiche direkt auf JSearch-Fallback aus.")
