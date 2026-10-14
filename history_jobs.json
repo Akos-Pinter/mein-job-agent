@@ -159,6 +159,32 @@
             "Datenintegration",
             "Monitoring"
         ],
-        "url": "https://www.linkedin.com/jobs/view/4479046646"
+        "url": "https://www.linkedin.com/jobs/view/4479046646",
+        "analyzed_at": "2026-10-14"
+    },
+    {
+        "score": 85,
+        "reason": "Auto 30 Min, ÖPNV 35 Min, gut erreichbar.",
+        "job_title": "DATA SCIENTIST (M/F/D)",
+        "company": "AI.Associates GmbH",
+        "company_employee_count": "N/A",
+        "location": "Stuttgart",
+        "route_distance": "25 km",
+        "route_duration": "30 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Vollzeit",
+        "experience_level": "Entry level",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Data Scientist role focusing on analysis, modeling, and deployment in a startup environment.",
+        "required_qualifications": [
+            "Python",
+            "TensorFlow/PyTorch",
+            "Data analysis",
+            "Feature engineering",
+            "Communication skills"
+        ],
+        "url": "https://de.indeed.com/viewjob?jk=ca92b5a9bd62df5d",
+        "analyzed_at": "2026-10-14"
     }
 ]
