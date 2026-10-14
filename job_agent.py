@@ -87,27 +87,27 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
         sys.exit(1)
 
 
-# 4.1 Fallback-Sourcing über RapidAPI JSearch
+# 4.1 Modifizierte Fallback-Sourcing über RapidAPI LinkedIn Job Search API
 def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30) -> Dict[str, Any]:
-    print(f"🔌 ⚙️ [FALLBACK AKTIV] Starte Umkreis-Abfrage ({distance_km} km) über RapidAPI JSearch...")
+    print(f"🔌 ⚙️ [FALLBACK AKTIV] Starte Umkreis-Abfrage ({distance_km} km) über RapidAPI LinkedIn Job Search API...")
     api_key = os.getenv("RAPIDAPI_KEY")
     if not api_key:
         print("❌ KRITISCHER FEHLER: RAPIDAPI_KEY nicht in den Secrets hinterlegt! Fallback unmöglich.")
         sys.exit(1)
         
-    url = "https://jsearch.p.rapidapi.com/search"
+    url = "https://linkedin-job-search-api.p.rapidapi.com/search-jobs"
     headers = {
         "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
+        "X-RapidAPI-Host": "linkedin-job-search-api.p.rapidapi.com"
     }
 	
     titles_query = " OR ".join(f'"{title}"' for title in search_titles)
-    combined_query = f"({titles_query}) in {location} within {distance_km} km, Full-time, Entry-level OR Mid-Senior"
     params = {
-        "query": combined_query,
-        "page": "1",
-        "num_pages": "1",
-        "date_posted": "week"
+        "search_terms": titles_query,
+        "location": location,
+        "distance": str(distance_km),
+        "time_posted": "anyTime", # Optionen: 'anyTime', 'pastWeek', 'pastMonth', 'past24Hours'
+        "page": "1"
     }
     
     try:
@@ -115,28 +115,22 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         response.raise_for_status()
         response_data = response.json()
         
-        raw_items = response_data.get("data", [])
-        print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
+        raw_items = response_data.get("jobs", response_data.get("data", []))
+        print(f"📥 LinkedIn Job Search API lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
         
         jobs = []
         for item in raw_items:
-            # Gehaltsspanne formatieren
-            min_sal = item.get("job_min_salary")
-            max_sal = item.get("job_max_salary")
-            currency = item.get("job_salary_currency", "EUR")
-            salary_str = f"{min_sal:,} - {max_sal:,} {currency}".replace(",", ".") if min_sal and max_sal else "N/A"
-            
-            # Mapping der Felder zu unserem einheitlichen Format
+            # Zuordnung der JSON-Objekt-Attribute entsprechend des neuen API-Schemas
             jobs.append({
-                "title": item.get("job_title", "Kein Titel"),
-                "company": item.get("employer_name", "Unbekannte Firma"),
-                "description": item.get("job_description", "")[:1000],
-                "location": f"{item.get('job_city', '')}, {item.get('job_state', '')}".strip(", "),
-                "url": item.get("job_apply_link", item.get("job_google_link", "https://linkedin.com")),
-                "salary": salary_str,
-                "postDate": item.get("job_posted_at_datetime_utc", "N/A")[:10] if item.get("job_posted_at_datetime_utc") else "N/A",
-                "contractType": "Full-time" if item.get("job_employment_type") == "FULLTIME" else item.get("job_employment_type", "N/A"),
-                "experienceLevel": "Mid-Senior level" if item.get("job_required_experience", {}).get("required_experience_in_months") else "Entry level",
+                "title": item.get("job_title", item.get("title", "Kein Titel")),
+                "company": item.get("company_name", item.get("company", "Unbekannte Firma")),
+                "description": item.get("job_description", item.get("description", ""))[:1000],
+                "location": item.get("job_location", item.get("location", "N/A")),
+                "url": item.get("job_link", item.get("url", "https://linkedin.com")),
+                "salary": item.get("salary", "N/A"),
+                "postDate": item.get("post_date", item.get("posted_at", "N/A")),
+                "contractType": item.get("job_type", "N/A"),
+                "experienceLevel": item.get("experience_level", "N/A"),
                 "companyEmployeeCount": "N/A"
             })
             
@@ -144,11 +138,11 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         
         return {
             "jobs": jobs,
-            "linkedin_total": f"ca. {scraped_total} (JSearch)",
+            "linkedin_total": f"ca. {scraped_total} (LinkedIn API)",
             "scraped_total": scraped_total
         }
     except Exception as e:
-        print(f"❌ KRITISCH: Fallback über JSearch ebenfalls fehlgeschlagen: {e}")
+        print(f"❌ KRITISCH: Fallback über LinkedIn Job Search API ebenfalls fehlgeschlagen: {e}")
         sys.exit(1)
 
 
@@ -160,7 +154,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
     token = os.getenv("APIFY_API_TOKEN")
     
     if not token:
-        print("⚠️ APIFY_API_TOKEN nicht gefunden! Weiche direkt auf JSearch-Fallback aus.")
+        print("⚠️ APIFY_API_TOKEN nicht gefunden! Weiche direkt auf LinkedIn API Fallback aus.")
         return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
         
     client = ApifyClient(token)
@@ -221,7 +215,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         }
         
     except Exception as e:
-        print(f"⚠️ Apify-Fehler aufgetreten: {e}. Weiche automatisch auf JSearch aus...")
+        print(f"⚠️ Apify-Fehler aufgetreten: {e}. Weiche automatisch auf LinkedIn API aus...")
         return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
 
 
@@ -234,6 +228,7 @@ def create_matching_chain():
         groq_api_key=api_key
     )
     parser = JsonOutputParser(pydantic_object=JobMatch)
+    
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Du bist ein präziser HR-Analyst und Geografie-Experte für den Großraum Stuttgart (inkl. Ditzingen). "
                    "Gleiche den Job mit dem Lebenslauf-Profil des Kandidaten ab. "
@@ -405,7 +400,7 @@ async def main():
         "Python Backend Developer"
     ]
     
-    # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
+    # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf LinkedIn API zurück)
     scraper_result = await fetch_jobs_via_apify(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
