@@ -9,7 +9,6 @@ jobs:
   run-agent:
     runs-on: ubuntu-latest
 
-    # WICHTIG: Erlaubt dem Workflow, Commits zurückzuschreiben [source: 8]
     permissions:
       contents: write
 
