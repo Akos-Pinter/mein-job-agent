@@ -238,7 +238,21 @@ def create_matching_chain():
                  "Wohnort des Kandidaten: {home_location}\n\n"
                  "Jobangebot:\nTitel: {title}\nFirma: {company}\nBeschreibung: {description}\nOrt: {location}\n"
                  "Gehaltsdaten (Apify): {salary_info}\nVeröffentlicht am/vor (Apify): {post_info}\nURL: {url}")
-    ])
+		("user", "Lebenslauf des Kandidaten:\n{profile}\n\n"
+		 "Wohnort des Kandidaten: {home_location}\n\n"
+		 "Jobangebot:\n"
+		 "Titel: {title}\n"
+		 "Firma: {company}\n"
+		 "Mitarbeiterzahl: {employee_count}\n"
+		 "Beschreibung: {description}\n"
+		 "Ort: {location}\n"
+		 "Vertragstyp: {contract_type}\n"
+		 "Erfahrungsstufe: {exp_level}\n"
+		 "Gehaltsdaten: {salary_info}\n"
+		 "Veröffentlicht: {post_info}\n"
+		 "URL: {url}"
+		)
+	])
     prompt = prompt.partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
 
@@ -471,9 +485,9 @@ async def main():
                     "exp_level": job.get("experienceLevel", "N/A"),
                     "salary_info": job.get("salary", "N/A"),
                     "post_info": job.get("postDate", "N/A"),
-                    "url": job["url"],
-		    "analyzed_at": current_date.strftime("%Y-%m-%d")
+                    "url": job["url"]
                 })
+				result["analyzed_at"] = current_date.strftime("%Y-%m-%d")
                 new_analyzed_jobs.append(result)
                 
             except Exception as e:
