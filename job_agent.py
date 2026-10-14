@@ -113,7 +113,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
 	
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
-		print(response.json())
+        print(response.json())
         response.raise_for_status()
         response_data = response.json()
         
