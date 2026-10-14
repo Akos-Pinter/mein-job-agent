@@ -107,7 +107,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
 		"country": "de",
         "num_pages": "1",
 		"radius": str(distance_km),
-		#"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
+		"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
 		#"job_requirements": "under_3_years_experience,3_to_7_years_experience"
 		}
 	
@@ -401,7 +401,8 @@ async def main():
     # C. Wunschtitel
     WUNSCH_TITEL = [
         "Data Scientist", 
-        "AI Engineer"
+        "AI Engineer",
+		"Entwickler Regelungsfunktionen"
     ]
     
     # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
