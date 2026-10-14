@@ -95,19 +95,19 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         print("❌ KRITISCHER FEHLER: RAPIDAPI_KEY nicht in den Secrets hinterlegt! Fallback unmöglich.")
         sys.exit(1)
         
-    url = "https://linkedin-job-search-api.p.rapidapi.com/search-jobs"
+    url = "https://linkedin-job-search-api.p.rapidapi.com/active-jb"
     headers = {
-        "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "linkedin-job-search-api.p.rapidapi.com"
+        "x-rapidapi-key": api_key,
+        "x-rapidapi-host": "linkedin-job-search-api.p.rapidapi.com"
     }
 	
     titles_query = " OR ".join(f'"{title}"' for title in search_titles)
     params = {
-        "search_terms": titles_query,
-        "location": location,
-        "distance": str(distance_km),
-        "time_posted": "anyTime", # Optionen: 'anyTime', 'pastWeek', 'pastMonth', 'past24Hours'
-        "page": "1"
+        "time_frame": "7d",
+        "limit": "100",
+        "description_format": "text",
+        "title": titles_query,
+        "location": location
     }
     
     try:
@@ -115,23 +115,28 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         response.raise_for_status()
         response_data = response.json()
         
-        raw_items = response_data.get("jobs", response_data.get("data", []))
+        # Flexibler Parser für verschiedene API-Antwortstrukturen
+        raw_items = []
+        if isinstance(response_data, list):
+            raw_items = response_data
+        elif isinstance(response_data, dict):
+            raw_items = response_data.get("jobs", response_data.get("data", []))
+            
         print(f"📥 LinkedIn Job Search API lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
         
         jobs = []
         for item in raw_items:
-            # Zuordnung der JSON-Objekt-Attribute entsprechend des neuen API-Schemas
             jobs.append({
                 "title": item.get("job_title", item.get("title", "Kein Titel")),
-                "company": item.get("company_name", item.get("company", "Unbekannte Firma")),
-                "description": item.get("job_description", item.get("description", ""))[:1000],
-                "location": item.get("job_location", item.get("location", "N/A")),
+                "company": item.get("company_name", item.get("organization", "Unbekannte Firma")),
+                "description": item.get("job_description", item.get("description_text", ""))[:1000],
+                "location": item.get("job_location", item.get("locations_derived", "N/A")),
                 "url": item.get("job_link", item.get("url", "https://linkedin.com")),
-                "salary": item.get("salary", "N/A"),
-                "postDate": item.get("post_date", item.get("posted_at", "N/A")),
-                "contractType": item.get("job_type", "N/A"),
-                "experienceLevel": item.get("experience_level", "N/A"),
-                "companyEmployeeCount": "N/A"
+                "salary": item.get("salary_raw", "N/A"),
+                "postDate": item.get("date_posted", item.get("posted_at", "N/A")),
+                "contractType": item.get("employment_type", "N/A"),
+                "experienceLevel": item.get("seniority", "N/A"),
+                "companyEmployeeCount": item.get("linkedin_org_employees", "N/A")
             })
             
         scraped_total = len(jobs)
