@@ -402,9 +402,7 @@ async def main():
     # C. Wunschtitel
     WUNSCH_TITEL = [
         "Data Scientist", 
-        "AI Engineer", 
-        "Entwickler Regelungsfunktionen",
-        "Python Backend Developer"
+        "AI Engineer"
     ]
     
     # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
