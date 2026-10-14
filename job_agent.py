@@ -112,7 +112,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
 	"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
 	"job_requirements": "under_3_years_experience,3_to_7_years_experience"
     }
-    
+    params = {"query":"developer jobs in chicago","num_pages":"1","country":"us","date_posted":"all"}
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
