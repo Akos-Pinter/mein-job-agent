@@ -18,7 +18,8 @@
             "TensorFlow",
             "PyTorch"
         ],
-        "url": "https://www.linkedin.com/jobs/view/4475189667"
+        "url": "https://www.linkedin.com/jobs/view/4475189667",
+        "analyzed_at": "2026-10-14"
     },
     {
         "score": 70,
@@ -39,7 +40,8 @@
             "Cloud Services (AWS/GCP)",
             "Projektmanagement & Teamführung"
         ],
-        "url": "https://www.linkedin.com/jobs/view/4476050981"
+        "url": "https://www.linkedin.com/jobs/view/4476050981",
+        "analyzed_at": "2026-10-14"
     },
     {
         "score": 55,
@@ -60,7 +62,8 @@
             "CAD/PLM/ERP Integration",
             "Evaluation & Testing"
         ],
-        "url": "https://www.linkedin.com/jobs/view/4476428842"
+        "url": "https://www.linkedin.com/jobs/view/4476428842",
+        "analyzed_at": "2026-10-14"
     },
     {
         "score": 70,
@@ -81,6 +84,31 @@
             "Cloud Platforms (Google Cloud, AWS)",
             "Data Engineering (SQL, ETL)"
         ],
-        "url": "https://www.linkedin.com/jobs/view/4476849544"
+        "url": "https://www.linkedin.com/jobs/view/4476849544",
+        "analyzed_at": "2026-10-14"
+    },
+    {
+        "score": 90,
+        "reason": "Starke Backend-Erfahrung, Cloud-Expertise, Pendelzeit < 50 Min. (Auto & ÖPNV).",
+        "job_title": "(Senior) Software Engineer - Backend Entwickler für SaaS Lösungen",
+        "company": "Bertrandt Group",
+        "company_employee_count": "12.000 Mitarbeiter",
+        "location": "Stuttgart, Baden-Württemberg, Germany",
+        "route_distance": "25 km",
+        "route_duration": "30 Min. Autofahrt",
+        "route_transit": "40 Min. mit ÖPNV",
+        "contract_type": "Full-time",
+        "experience_level": "Senior level",
+        "salary_source": "N/A",
+        "post_date": "2026-10-12",
+        "job_summary": "Senior Backend Engineer für SaaS-Lösungen, Fokus auf Cloud-Technologien.",
+        "required_qualifications": [
+            "Cloud-Technologien",
+            "Backend-Entwicklung",
+            "SaaS-Erfahrung",
+            "Agile/Scrum",
+            "Moderne Frameworks"
+        ],
+        "url": "https://www.linkedin.com/jobs/view/4476053491"
     }
 ]
