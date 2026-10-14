@@ -340,16 +340,16 @@ async def main():
     cleaned_history = []
     current_date = datetime.now()
     
-    for job in history_data:
-    	analyzed_at_str = job.get("analyzed_at")
-    	if analyzed_at_str:
-    		analyzed_date = datetime.strptime(analyzed_at_str, "%Y-%m-%d")
-            if current_date - analyzed_date <= timedelta(days=JOB_LIFETIME_DAYS):
-                cleaned_history.append(job)
-        else:
-            # Fallback für ganz alte Jobs ohne Zeitstempel (Erhalten einmalig den heutigen Stempel)
-            job["analyzed_at"] = current_date.strftime("%Y-%m-%d")
-            cleaned_history.append(job)
+	for job in history_data:
+	    analyzed_at_str = job.get("analyzed_at")
+	    if analyzed_at_str:
+	        analyzed_date = datetime.strptime(analyzed_at_str, "%Y-%m-%d")
+	        if current_date - analyzed_date <= timedelta(days=JOB_LIFETIME_DAYS):
+	            cleaned_history.append(job)
+	    else:
+	        # Fallback für ganz alte Jobs ohne Zeitstempel (Erhalten einmalig den heutigen Stempel)
+	        job["analyzed_at"] = current_date.strftime("%Y-%m-%d")
+	        cleaned_history.append(job)
                 
     removed_count = len(history_data) - len(cleaned_history)
     if removed_count > 0:
