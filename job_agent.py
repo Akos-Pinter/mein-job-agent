@@ -3,6 +3,7 @@ import sys
 import json
 import asyncio
 import smtplib
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Dict, Any
@@ -23,6 +24,7 @@ from pydantic import BaseModel, Field
 MY_HOME_LOCATION = "Ditzingen, 71254"
 HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
+JOB_LIFETIME_DAYS = 14 
 
 # 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
@@ -30,17 +32,20 @@ class JobMatch(BaseModel):
     reason: str = Field(description="Begründung für die Bewertung (max. 20 Wörter). Erwähne kurz die Erreichbarkeit mit Auto vs. ÖPNV.")
     job_title: str = Field(description="Der Titel des analysierten Jobs.")
     company: str = Field(description="Die Firma des Jobs.")
+    company_employee_count: str = Field(description="Die Mitarbeiteranzahl der Firma als formatiertes Textfeld (z.B. '240.000 Mitarbeiter' oder 'N/A' falls unbekannt).")
     location: str = Field(description="Der Arbeitsort (z.B. Stadt, Hybrid, Remote) des Jobs.")
     route_distance: str = Field(description="Die geschätzte Entfernung von Ditzingen zum Arbeitsort in Kilometern (z.B. '25 km').")
     route_duration: str = Field(description="Die geschätzte Reisezeit mit dem Auto bei normalem Verkehr (z.B. '30 Min. Autofahrt').")
     route_transit: str = Field(description="Die geschätzte Reisezeit mit Bahn/ÖPNV vom Bahnhof Ditzingen zum Ziel (z.B. '45 Min. mit ÖPNV').")
+    contract_type: str = Field(description="Der Vertragstyp der Stelle (z.B. 'Full-time', 'Part-time', 'Contract' oder 'N/A').")
+    experience_level: str = Field(description="Die geforderte Erfahrungsstufe der Stelle (z.B. 'Mid-Senior level', 'Entry level', 'Associate' oder 'N/A').")
     salary_source: str = Field(description="Das geschätzte oder verifizierte Gehalt / Gehaltsspanne der Stelle (z.B. '80.000 € - 95.000 €' oder 'N/A').")
     post_date: str = Field(description="Das genaue Veröffentlichungsdatum der Stelle (z.B. 'Vor 3 Tagen' oder das exakte Datum, falls vorhanden).")
     job_summary: str = Field(description="Eine ultrakurze, prägnante Zusammenfassung der Stelle und Aufgaben (max. 2 Sätze).")
     required_qualifications: List[str] = Field(description="Eine Liste der wichtigsten 3-5 notwendigen Qualifikationen, Fähigkeiten oder Technologien.")
     url: str = Field(description="Die vollständige URL-Adresse zur Bewerbung oder zur Stellenausschreibung.")
 
-# 2. Hilfsfunktionen zum Laden und Speichern der Verlaufsdaten
+# 2. Hilfsfunktionen zum Laden und Speichern der Verlaufsdaten (JSON)
 def load_history() -> List[Dict[str, Any]]:
     if os.path.exists(HISTORY_FILE):
         try:
@@ -76,7 +81,7 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
         print(f"❌ KRITISCHER FEHLER beim Laden des Lebenslaufs: {e}")
         sys.exit(1)
 
-# 4. Job-Abfrage über den stabilen Python Apify-Client (Unterstützt das Sourcing-Limit)
+# 4. Job-Abfrage über den stabilen Python Apify-Client
 async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]:
     distance_miles = int(distance_km * 0.62)
     
@@ -92,7 +97,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             "titles": search_titles,      
             "locations": [location],       
             "distance": distance_miles,    
-            "limit": fetch_limit,
+            "limit": fetch_limit,             
             "publishedAt": "r604800", # Letzte 7 Tage
             "enrichCompany": True,
             "jobType": ["full-time", "part-time", "contract"],
@@ -100,7 +105,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         }
         
         print(f"📥 Starte den LinkedIn-Scraper-Task...")
-        run = client.actor("bebity/linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=300)
+        run = client.actor("bebity/linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=180)
         
         print("📦 Lade strukturierte Ergebnisse herunter...")
         dataset = client.dataset(run["defaultDatasetId"])
@@ -110,7 +115,6 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         linkedin_search_totals = "Unbekannt"
         try:
             kvs = client.key_value_store(run["defaultKeyValueStoreId"])
-            # Wir warten bis zu 3 Sek für asynchrone Metadaten
             for _ in range(2):
                 search_totals_record = kvs.get_record("SEARCH_TOTALS")
                 if search_totals_record and "value" in search_totals_record:
@@ -130,11 +134,14 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 "location": item.get("location", "N/A"),
                 "url": item.get("url", item.get("jobUrl", "https://linkedin.com")),
                 "salary": item.get("salary", item.get("salarySource", "N/A")),
-                "postDate": item.get("publishedAt", item.get("postedTime", "N/A"))
+                "postDate": item.get("publishedAt", item.get("postedTime", "N/A")),
+                "contractType": item.get("contractType", "N/A"),
+                "experienceLevel": item.get("experienceLevel", "N/A"),
+                "companyEmployeeCount": item.get("companyEmployeeCount", "N/A")
             })
             
         scraped_total = len(jobs)
-        print(item) # for testing purposes
+        
         return {
             "jobs": jobs,
             "linkedin_total": linkedin_search_totals,
@@ -168,7 +175,7 @@ def create_matching_chain():
     prompt = prompt.partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
 
-# 6. E-Mail Versendungsfunktion (HTML) mit Berücksichtigung von alten und neuen Jobs
+# 6. E-Mail Versendungsfunktion (HTML)
 def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, Any]], linkedin_total: str, scraped_total: int, test_mode: bool = False):
     sender_email = os.getenv("EMAIL_SENDER")
     sender_password = os.getenv("EMAIL_PASSWORD")
@@ -181,7 +188,6 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
     msg = MIMEMultipart("alternative")
     subject_prefix = "[TEST-RUN] " if test_mode else ""
     
-    # Gesamte Jobliste zusammenführen (Neue zuerst, sortiert nach Score)
     full_jobs_list = new_jobs + old_jobs
     full_jobs_list.sort(key=lambda x: x.get('score', 0), reverse=True)
 
@@ -220,7 +226,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
                 • Insgesamt passende Stellen auf LinkedIn vorhanden: <b>{linkedin_total if not test_mode else 'Inaktiv (im Testmodus)'}</b><br>
                 • Davon für diesen Bericht live von LinkedIn geladen: <b>{scraped_total}</b><br>
                 • Neu hinzugekommene und analysierte Treffer: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
-                • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b>
+                • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b> (Aufbewahrung: {JOB_LIFETIME_DAYS} Tage)
             </div>
     """
 
@@ -228,16 +234,19 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
         score = job['score']
         qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
         
-        # Flaggen, ob es sich um einen neuen Job aus diesem Durchlauf handelt
         is_new = any(nj['url'] == job['url'] for nj in new_jobs)
         new_badge_html = '<span class="new-badge">NEU ✨</span><br><br>' if is_new else ''
+
+        # Firmenmitarbeiteranzahl in runden Klammern hinter dem Firmennamen ausgeben (falls vorhanden)
+        emp_count = job.get('company_employee_count', 'N/A')
+        formatted_company_display = f"{job['company']} ({emp_count})" if emp_count != "N/A" else job['company']
 
         html_template += f"""
             <div class="job-card">
                 {new_badge_html}
                 <span class="score" style="color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}">{score}% Match</span>
                 <strong style="font-size: 17px;">{job['job_title']}</strong><br>
-                <span style="color: #4b5563; font-size: 14px;">{job['company']}</span><br>
+                <span style="color: #4b5563; font-size: 14px;">{formatted_company_display}</span><br>
                 <span class="location-text">📍 {job.get('location', 'N/A')}</span><br>
                 
                 <div class="route-info">
@@ -246,6 +255,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
                 </div>
                 
                 <div class="meta-info">
+                    💼 <b>Vertragstyp & Ebene:</b> {job.get('contract_type', 'N/A')} | {job.get('experience_level', 'N/A')}<br>
                     💰 <b>Gehalt:</b> {job.get('salary_source', 'Nicht angegeben')}<br>
                     📅 <b>Veröffentlicht:</b> {job.get('post_date', 'N/A')}
                 </div>
@@ -290,10 +300,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
 async def main():
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
     
-    # 💡 DIE NEUEN DYNAMISCHEN LIMITS (GETRENNT FÜR SOURCING UND KI-ANALYSE)
-    # Sourcing: Wie viele Stellen live auf LinkedIn abgefragt werden.
-    FETCH_LIMIT = 50
-    # KI-Analyse: Wie viele der neu gefundenen Stellen maximal von Groq analysiert werden.
+    FETCH_LIMIT = 25
     ANALYZE_LIMIT = 1 if test_mode else 25
     
     # A. Strikte PDF-Extraktion am Anfang
@@ -310,7 +317,7 @@ async def main():
         "Python Backend Developer"
     ]
     
-    # D. Aktuelle Live-Stellen mit FETCH_LIMIT abrufen
+    # D. Aktuelle Live-Stellen abrufen
     scraper_result = await fetch_jobs_via_apify(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
@@ -325,24 +332,36 @@ async def main():
     if not raw_jobs:
         print("❌ Keine Jobs empfangen. Breche ab.")
         sys.exit(1)
+
+    # E. Die rohen Sourcing-Ergebnisse abspeichern
     save_json_file(raw_jobs, RAW_JOBS_FILE)
 
-    # E. SÄUBERUNG: Alte Jobs entfernen, die online nicht mehr existieren
-    current_live_urls = {job['url'] for job in raw_jobs}
-    cleaned_history = [job for job in history_data if job['url'] in current_live_urls]
-    removed_count = len(history_data) - len(cleaned_history)
+    # F. SÄUBERUNGSWEICHE: "Time-to-Live" (TTL) statt Live-Abgleich
+    cleaned_history = []
+    current_date = datetime.now()
     
+    for job in history_data:
+    	analyzed_at_str = job.get("analyzed_at")
+    	if analyzed_at_str:
+    		analyzed_date = datetime.strptime(analyzed_at_str, "%Y-%m-%d")
+            if current_date - analyzed_date <= timedelta(days=JOB_LIFETIME_DAYS):
+                cleaned_history.append(job)
+        else:
+            # Fallback für ganz alte Jobs ohne Zeitstempel (Erhalten einmalig den heutigen Stempel)
+            job["analyzed_at"] = current_date.strftime("%Y-%m-%d")
+            cleaned_history.append(job)
+                
+    removed_count = len(history_data) - len(cleaned_history)
     if removed_count > 0:
-        print(f"🧹 Säuberung: {removed_count} veraltete/gelöschte Jobs wurden aus der Datenbank entfernt.")
+	print(f"🧹 TTL-Säuberung: {removed_count} veraltete Jobs (älter als {JOB_LIFETIME_DAYS} Tage) wurden gelöscht.")
 
-    # F. DUPLIKATE FILTERN: Nur neue URLs erfassen
+    # G. DUPLIKATE FILTERN: Nur neue URLs erfassen
     known_urls = {job['url'] for job in cleaned_history}
     new_unseen_jobs = [job for job in raw_jobs if job['url'] not in known_urls]
     
     print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} live gefundenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
 
-    # 💡 G. KI-LIMITIERUNG ANWENDEN (Schnittstelle begrenzen)
-    # Wir begrenzen die neuen Stellen für die Groq-Analyse auf das ANALYZE_LIMIT
+    # H. KI-LIMITIERUNG ANWENDEN
     jobs_to_analyze = new_unseen_jobs[:ANALYZE_LIMIT]
     
     if new_unseen_jobs and len(new_unseen_jobs) > ANALYZE_LIMIT:
@@ -351,7 +370,7 @@ async def main():
     match_chain = create_matching_chain()
     new_analyzed_jobs = []
 
-    # H. Nur die begrenzten neuen Jobs durch die KI jagen
+    # I. Nur die begrenzten neuen Jobs durch die KI jagen
     if jobs_to_analyze:
         print(f"🧠 Starte KI-Abgleich für {len(jobs_to_analyze)} neue Jobs (Limit: {ANALYZE_LIMIT})...")
         for job in jobs_to_analyze:
@@ -366,9 +385,13 @@ async def main():
                     "company": job["company"],
                     "description": job["description"],
                     "location": job["location"],
+                    "employee_count": job.get("companyEmployeeCount", "N/A"),
+                    "contract_type": job.get("contractType", "N/A"),
+                    "exp_level": job.get("experienceLevel", "N/A"),
                     "salary_info": job.get("salary", "N/A"),
                     "post_info": job.get("postDate", "N/A"),
-                    "url": job["url"]
+                    "url": job["url"],
+		    "analyzed_at": current_date.strftime("%Y-%m-%d")
                 })
                 new_analyzed_jobs.append(result)
                 
@@ -377,11 +400,13 @@ async def main():
     else:
         print("☕ Keine neuen Jobs zur Analyse ausstehend.")
 
-    # I. Bereinigten Verlauf mit neuen Analysen zusammenführen und abspeichern
+    # J. Bereinigten Verlauf mit neuen Analysen zusammenführen
     updated_history = cleaned_history + new_analyzed_jobs
+    
+    # K. Verlauf abspeichern
     save_json_file(updated_history, HISTORY_FILE)
 
-    # J. E-Mail versenden (Zusammenführung alte + neue Jobs)
+    # L. E-Mail versenden (Zusammenführung alte + neue Jobs)
     send_email_report(
         new_jobs=new_analyzed_jobs,
         old_jobs=cleaned_history,
