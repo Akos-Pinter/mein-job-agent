@@ -89,7 +89,7 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
 
 
 # 4.1 Fallback-Sourcing über RapidAPI JSearch
-def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30) -> Dict[str, Any]:
+def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
     print(f"🔌 ⚙️ [FALLBACK AKTIV] Starte Umkreis-Abfrage ({distance_km} km) über RapidAPI JSearch...")
     api_key = os.getenv("RAPIDAPI_KEY")
     if not api_key:
@@ -102,11 +102,12 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         "x-rapidapi-host": "jsearch.p.rapidapi.com"
     }
 	
+	required_pages = min(max(1, -(-fetch_limit // 10)), 20)
     titles_query = " OR ".join(f'"{title}"' for title in search_titles)
     params = {
         "query": f"{titles_query} in {location}",
 		"country": "de",
-        "num_pages": "1",
+        "num_pages": str(required_pages),
 		"radius": str(distance_km),
 		#"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
 		#"job_requirements": "under_3_years_experience,3_to_7_years_experience"
@@ -162,7 +163,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
     
     if not token:
         print("⚠️ APIFY_API_TOKEN nicht gefunden! Weiche direkt auf JSearch-Fallback aus.")
-        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
+        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km, fetch_limit=fetch_limit)
         
     client = ApifyClient(token)
     try:
@@ -223,7 +224,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         
     except Exception as e:
         print(f"⚠️ Apify-Fehler aufgetreten: {e}. Weiche automatisch auf JSearch aus...")
-        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
+        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km, fetch_limit=fetch_limit)
 
 # 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
 async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
@@ -487,7 +488,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
 async def main():
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
     
-    FETCH_LIMIT = 25
+    FETCH_LIMIT = 100
     ANALYZE_LIMIT = 1 if test_mode else 25
     
     # A. Strikte PDF-Extraktion am Anfang
