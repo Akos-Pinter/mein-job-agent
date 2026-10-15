@@ -226,7 +226,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
 
 # 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
-def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
+async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
     print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte synchrone V6-Abfrage ({distance_km} km) über Bundesagentur für Arbeit (Limit pro Suche: {fetch_limit})...")
     
     headers = {
@@ -503,7 +503,7 @@ async def main():
 		]
     
     # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
-    scraper_result = fetch_jobs_via_apify(
+    scraper_result = await fetch_jobs_via_apify(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
         distance_km=30,
