@@ -336,5 +336,30 @@
         ],
         "url": "https://www.arbeitsagentur.de/jobsuche/job/10001-1002144394-S",
         "analyzed_at": "2026-10-15"
+    },
+    {
+        "score": 90,
+        "reason": "Ausgeprägte KI- und Data‑Science‑Kenntnisse, Auto/ÖPNV nicht relevant.",
+        "job_title": "Kein Titel",
+        "company": "Unbekannte Firma",
+        "company_employee_count": "N/A",
+        "location": "N/A",
+        "route_distance": "N/A",
+        "route_duration": "N/A",
+        "route_transit": "N/A",
+        "contract_type": "Full-time",
+        "experience_level": "Mid-Senior level",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Data Scientist Engineer für Reporting‑Lösungen, Power‑BI, Data Warehouse, ETL/ELT.",
+        "required_qualifications": [
+            "Python",
+            "Machine Learning",
+            "Data Engineering",
+            "SQL",
+            "ETL"
+        ],
+        "url": "https://www.arbeitsagentur.de/jobsuche/job/10001-1003685161-S",
+        "analyzed_at": "2026-10-15"
     }
 ]
