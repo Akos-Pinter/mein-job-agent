@@ -23,7 +23,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 # 📍 IHR WOHNORT
-MY_HOME_LOCATION = "Ditzingen, 71254, Baden-Württemberg, Germany"
+MY_HOME_LOCATION = "Ditzingen, Baden-Württemberg, Germany"
 HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
 JOB_LIFETIME_DAYS = 14 
@@ -102,7 +102,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         "x-rapidapi-host": "jsearch.p.rapidapi.com"
     }
 	
-	required_pages = min(max(1, -(-fetch_limit // 10)), 20)
+    required_pages = min(max(1, -(-fetch_limit // 10)), 20)
     titles_query = " OR ".join(f'"{title}"' for title in search_titles)
     params = {
         "query": f"{titles_query} in {location}",
