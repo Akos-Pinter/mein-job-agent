@@ -114,11 +114,11 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
 	
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
-		response.raise_for_status()
+        response.raise_for_status()
         response_data = response.json()
         
         raw_items = response_data.get("data", []).get("jobs", [])
-		total_hits = response_data.get("estimated_results", response_data.get("total_results", "Unbekannt"))
+        total_hits = response_data.get("estimated_results", response_data.get("total_results", "Unbekannt"))
         print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius von insgesamt ca. {total_hits} Stellen.")
 		
         jobs = []
