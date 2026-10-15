@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import base64
 import asyncio
 import requests
 import smtplib
@@ -224,6 +225,110 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         print(f"⚠️ Apify-Fehler aufgetreten: {e}. Weiche automatisch auf JSearch aus...")
         return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
 
+# 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
+def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
+	print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte Abfrage ({distance_km} km) über Bundesagentur für Arbeit...")
+    
+    headers = {
+        "X-API-Key": "jobboerse-jobsuche",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
+    # Wir extrahieren nur die Postleitzahl (z.B. '71254' aus 'Ditzingen, 71254') für die Suche
+    zip_code = "".join(filter(str.isdigit, location)) or location
+    
+    jobs = []
+    
+    # Da die BA-API keine komplexen OR-Kombinationen in 'was' mag, fragen wir die Titel einzeln ab
+    for title in search_titles:
+        search_url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs"
+		params = {
+		    "was": title,
+		    "wo": zip_code,
+		    "umkreis": str(distance_km),
+		    "arbeitszeit": "vz;tz;ho",       # Vollzeit, Teilzeit oder Homeoffice möglich
+		    "veroeffentlichtseit": "7",      # Nur Jobs der letzten 7 Tage (perfekt für wöchentliche Skripte!)
+		    "befristung": "2",               # Nur unbefristete Festanstellungen
+		    "zeitarbeit": "false",           # Keine Zeitarbeitsfirmen (reduziert Spam drastisch)
+		    "pav": "false",                  # Keine privaten Arbeitsvermittler
+		    "angebotsart": "1",              # Nur reguläre Arbeitsverhältnisse (keine Praktika)
+		    "page": "1",
+		    "size": str(fetch_limit)
+			}
+
+        try:
+            response = requests.get(search_url, headers=headers, params=params, timeout=10)
+            if response.status_code == 404:
+                continue
+            response.raise_for_status()
+            search_results = response.json()
+            
+            raw_items = search_results.get("stellenangebote", [])
+            print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden.")
+            
+            for item in raw_items:
+                ref_nr = item.get("refnr")
+                if not ref_nr:
+                    continue
+                
+                # Double-Check: Keine doppelten Jobbörsen-IDs in diesem Durchlauf
+                if any(job["url"].endswith(ref_nr) for job in jobs):
+                    continue
+                
+                # Detail-URL ermitteln (erfordert Base64-Kodierung der Referenznummer)
+                encoded_ref = base64.b64encode(ref_nr.encode()).decode()
+                detail_url = f"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{encoded_ref}"
+                
+                # Gehalt formatieren (falls vorhanden)
+                salary_val = item.get("gehalt", "N/A")
+                
+                # 2. Schritt: Detailinformationen (Beschreibung, etc.) abrufen
+                description = ""
+                contract_type = "Full-time"
+                experience_level = "Mid-Senior level"
+                
+                try:
+                    detail_resp = requests.get(detail_url, headers=headers, timeout=5)
+                    if detail_resp.status_code == 200:
+                        detail_data = detail_resp.json()
+                        description = detail_data.get("stellenangebotsBeschreibung", "")
+                        
+                        # Zusatz-Metadaten extrahieren
+                        is_temporary = detail_data.get("befristung", 2) == 1 # 1=befristet, 2=unbefristet
+                        contract_type = "Contract" if is_temporary else "Full-time"
+                except Exception:
+                    pass # Verwende Standard-Fallback-Werte bei Detail-Fehlern
+                
+                # Wenn kein Beschreibungstext geladen werden konnte, nutzen wir den Titel
+                if not description:
+                    description = f"Stelle als {item.get('beruf', 'Fachkraft')} in {item.get('arbeitsort', {}).get('ort', 'N/A')}."
+
+                # Einheitliches Format sichern
+                jobs.append({
+                    "title": item.get("beruf", "Kein Titel"),
+                    "company": item.get("arbeitgeber", "Unbekannte Firma"),
+                    "description": description[:1000],
+                    "location": item.get("arbeitsort", {}).get("ort", "N/A"),
+                    "url": item.get("externeUrl") or f"https://www.arbeitsagentur.de/jobsuche/job/{ref_nr}",
+                    "salary": salary_val if salary_val else "N/A",
+                    "postDate": item.get("modifikationsDatum", "N/A"),
+                    "contractType": contract_type,
+                    "experienceLevel": experience_level,
+                    "companyEmployeeCount": "N/A"
+                })
+                
+        except Exception as e:
+            print(f"⚠️ Warnung bei Abfrage von '{title}': {e}")
+            continue
+
+    scraped_total = len(jobs)
+    print(f"📥 Insgesamt {scraped_total} eindeutige Jobs von der Bundesagentur geladen.")
+    
+    return {
+        "jobs": jobs,
+        "linkedin_total": f"{scraped_total} (Arbeitsagentur)",
+        "scraped_total": scraped_total
+    }
 
 # 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
 def create_matching_chain():
@@ -406,7 +511,7 @@ async def main():
     ]
     
     # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
-    scraper_result = await fetch_jobs_via_apify(
+    scraper_result = await fetch_jobs_via_arbeitsagentur(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
         distance_km=30,
