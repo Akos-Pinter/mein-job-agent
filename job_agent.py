@@ -226,28 +226,22 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
         return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km)
 
 # 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
-import urllib3
-# Warnungen vor ungültigen SSL-Zertifikaten (durch den IP-Bypass) unterdrücken
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    print(f"🔌 🇩🇪 [BA API ACTIVE] Starte DNS-Bypass-Abfrage ({distance_km} km) direkt an die Bundesagentur für Arbeit...")
+    # GEÄNDERT: Wir nutzen den offiziellen, stabilen API-Spiegel von bund.dev!
+    print(f"🔌 🇩🇪 [BUND.DEV PROXY ACTIVE] Starte stabile Suche ({distance_km} km) über bund.dev API-Spiegel...")
     
+    # bund.dev spiegelt die BA-Suche direkt und ist global erreichbar
     headers = {
-        "X-API-Key": "jobboerse-jobsuche",
-        "Host": "rest.arbeitsagentur.de",  # Damit der BA-Server weiß, wer gemeint ist
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "de-DE,de;q=0.9"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json"
     }
     
     zip_code = "".join(filter(str.isdigit, location)) or location
     jobs = []
     
     for title in search_titles:
-        # KORRIGIERT: Wir nutzen die direkte, feste IP-Adresse des BA-Servers (Umgeht das Geoblocking!)
-        search_url = "https://195.37.209.139/jobboerse/jobsuche-service/pc/v6/jobs"
-        
+        # GEÄNDERT: bund.dev API-Endpoint für die Jobsuche v6
+        search_url = f"https://jobsuche.api.bund.dev/pc/v6/jobs"
         params = {
             "was": title,
             "wo": zip_code,
@@ -263,15 +257,14 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
         }
         
         try:
-            # verify=False ist notwendig, da das SSL-Zertifikat auf 'rest.arbeitsagentur.de' lautet, wir aber die IP anrufen
-            response = requests.get(search_url, headers=headers, params=params, timeout=15, verify=False)
+            response = requests.get(search_url, headers=headers, params=params, timeout=15)
             if response.status_code == 404:
                 continue
             response.raise_for_status()
             search_results = response.json()
             
             raw_items = search_results.get("stellenangebote", [])
-            print(f"   ↳ '{title}': {len(raw_items)} echte BA-Treffer gefunden.")
+            print(f"   ↳ '{title}': {len(raw_items)} echte BA-Treffer (via bund.dev) gefunden.")
             
             for item in raw_items:
                 ref_nr = item.get("referenznummer") or item.get("refnr")
@@ -281,9 +274,9 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
                 if any(job["url"].endswith(ref_nr) for job in jobs):
                     continue
                 
+                # Auch die Detailabfrage wird stabil gespiegelt
                 encoded_ref = base64.b64encode(ref_nr.encode()).decode()
-                # Detailabfrage ebenfalls über die direkte IP-Adresse
-                detail_url = f"https://195.37.209.139/jobboerse/jobsuche-service/pc/v4/jobdetails/{encoded_ref}"
+                detail_url = f"https://jobsuche.api.bund.dev/pc/v4/jobdetails/{encoded_ref}"
                 
                 salary_val = item.get("gehalt", "N/A")
                 description = ""
@@ -291,7 +284,7 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
                 experience_level = "Mid-Senior level"
                 
                 try:
-                    detail_resp = requests.get(detail_url, headers=headers, timeout=6, verify=False)
+                    detail_resp = requests.get(detail_url, headers=headers, timeout=6)
                     if detail_resp.status_code == 200:
                         detail_data = detail_resp.json()
                         description = detail_data.get("stellenangebotsBeschreibung", "")
@@ -325,7 +318,7 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
     
     return {
         "jobs": jobs,
-        "linkedin_total": f"{scraped_total} (Arbeitsagentur)",
+        "linkedin_total": f"{scraped_total} (Arbeitsagentur via bund.dev)",
         "scraped_total": scraped_total
     }
 
