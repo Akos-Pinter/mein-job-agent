@@ -488,7 +488,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
 async def main():
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
     
-    FETCH_LIMIT = 100
+    FETCH_LIMIT = 25
     ANALYZE_LIMIT = 1 if test_mode else 25
     
     # A. Strikte PDF-Extraktion am Anfang
