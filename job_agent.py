@@ -213,7 +213,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
                 "experienceLevel": item.get("experienceLevel", "N/A"),
                 "companyEmployeeCount": item.get("companyEmployeeCount", "N/A")
             })
-            
+
         scraped_total = len(jobs)
         
         return {
