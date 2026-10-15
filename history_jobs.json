@@ -311,5 +311,30 @@
         ],
         "url": "https://www.learn4good.com/jobs/stuttgart/deutschland/informationstechnik_and_it/5546475744/g/",
         "analyzed_at": "2026-10-15"
+    },
+    {
+        "score": 90,
+        "reason": "Ausgezeichnete KI-Expertise, Python, ML, German C2; Pendelzeit unbekannt, daher keine negative Bewertung.",
+        "job_title": "Kein Titel",
+        "company": "Unbekannte Firma",
+        "company_employee_count": "N/A",
+        "location": "N/A",
+        "route_distance": "N/A",
+        "route_duration": "N/A",
+        "route_transit": "N/A",
+        "contract_type": "Full-time",
+        "experience_level": "Mid-Senior level",
+        "salary_source": "N/A",
+        "post_date": "N/A",
+        "job_summary": "Data science and AI development role requiring strong programming and statistical modeling skills.",
+        "required_qualifications": [
+            "Python",
+            "Machine Learning",
+            "Data Cleaning",
+            "Statistical Modeling",
+            "German C2"
+        ],
+        "url": "https://www.arbeitsagentur.de/jobsuche/job/10001-1002144394-S",
+        "analyzed_at": "2026-10-15"
     }
 ]
