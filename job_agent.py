@@ -134,7 +134,7 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
             jobs.append({
                 "title": item.get("job_title", "Kein Titel"),
                 "company": item.get("employer_name", "Unbekannte Firma"),
-                "description": item.get("job_description", "")[:1000],
+                "description": item.get("job_description", "")[:5000],
                 "location": f"{item.get('job_city', '')}, {item.get('job_state', '')}".strip(", "),
                 "url": item.get("job_apply_link", item.get("job_google_link", "https://linkedin.com")),
                 "salary": salary_str,
@@ -204,7 +204,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             jobs.append({
                 "title": item.get("title", item.get("job_title", "Kein Titel")),
                 "company": item.get("companyName", item.get("company", "Unbekannte Firma")),
-                "description": item.get("description", "")[:1000],
+                "description": item.get("description", "")[:5000],
                 "location": item.get("location", "N/A"),
                 "url": item.get("url", item.get("jobUrl", "https://linkedin.com")),
                 "salary": item.get("salary", item.get("salarySource", "N/A")),
@@ -264,49 +264,50 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
             print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden (API size: {fetch_limit}).")
             
             for item in raw_items:
-                ref_nr = item.get("referenznummer") or item.get("refnr")
-                if not ref_nr:
-                    continue
-                
+                ref_nr = item.get("referenznummer", "")	
                 # Duplikate über die verschiedenen Suchen hinweg vermeiden
                 if any(job["url"].endswith(ref_nr) for job in jobs):
                     continue
                 
                 # Detailabfrage
-                encoded_ref = base64.b64encode(ref_nr.encode()).decode()
-                detail_url = f"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{encoded_ref}"
-                
-                salary_val = item.get("gehalt", "N/A")
-                description = ""
-                contract_type = "Full-time"
-                experience_level = "Mid-Senior level"
+                base64_ref = base64.b64encode(ref_nr.encode("utf-8")).decode("utf-8")
+                detail_url = f"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{base64_ref}"
                 
                 try:
                     detail_resp = requests.get(detail_url, headers=headers, timeout=6)
                     if detail_resp.status_code == 200:
                         detail_data = detail_resp.json()
                         description = detail_data.get("stellenangebotsBeschreibung", "")
-                        is_temporary = detail_data.get("befristung", 2) == 1
-                        contract_type = "Contract" if is_temporary else "Full-time"
                 except Exception:
+                    description = "N/A"
                     pass
-                
-                if not description:
-                    description = f"Stelle als {item.get('beruf', 'Fachkraft')} in {item.get('arbeitsort', {}).get('ort', 'N/A')}."
 
+				# Informationen sicher extrahieren
+                lokationen = item.get("stellenlokationen", [])
+                ort_name = lokationen[0].get("adresse", {}).get("ort", "N/A") if lokationen else "N/A"
+                verguetung = item.get("verguetungsangabe")
+                salary_val = "N/A" if verguetung == "KEINE_ANGABEN" else verguetung
+                if item.get("arbeitszeitVollzeit"):
+                    arbeitszeit = "Vollzeit"
+                elif any([item.get("arbeitszeitTeilzeitFlexibel"), item.get("arbeitszeitTeilzeitVormittag"), 
+				          item.get("arbeitszeitTeilzeitNachmittag"), item.get("arbeitszeitTeilzeitAbend")]):
+                    arbeitszeit = "Teilzeit"
+                else:
+                    arbeitszeit = "N/A"
+				
                 jobs.append({
-                    "title": item.get("beruf", "Kein Titel"),
-                    "company": item.get("arbeitgeber", "Unbekannte Firma"),
-                    "description": description[:1000],
-                    "location": item.get("arbeitsort", {}).get("ort", "N/A"),
-                    "url": item.get("externeUrl") or f"https://www.arbeitsagentur.de/jobsuche/job/{ref_nr}",
-                    "salary": salary_val if salary_val else "N/A",
-                    "postDate": item.get("modifikationsDatum", "N/A"),
-                    "contractType": contract_type,
-                    "experienceLevel": experience_level,
-                    "companyEmployeeCount": "N/A"
-                })
-                
+				    "title": item.get("stellenangebotsTitel", "Kein Titel"),
+				    "company": item.get("firma", "Unbekannte Firma"),
+				    "description": description[:5000],
+				    "location": ort_name,
+				    "url": item.get("externeUrl") or f"https://www.arbeitsagentur.de/jobsuche/job/{ref_nr}",
+				    "salary": salary_val,
+				    "postDate": item.get("datumErsteVeroeffentlichung", "N/A"),  # Alternativ: item.get("aenderungsdatum")
+				    "contractType": arbeitszeit,
+				    "experienceLevel": "N/A",
+				    "companyEmployeeCount": "N/A"
+				})
+				                
         except Exception as e:
             print(f"⚠️ Warnung bei Abfrage von '{title}': {e}")
             continue
