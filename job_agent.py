@@ -260,7 +260,7 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
             response.raise_for_status()
             search_results = response.json()
             
-            raw_items = search_results.get("stellenangebote", [])
+            raw_items = search_results.get("ergebnisliste", [])
             print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden (API size: {fetch_limit}).")
             
             for item in raw_items:
