@@ -114,10 +114,12 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
 	
     try:
         response = requests.get(url, headers=headers, params=params, timeout=15)
+		response.raise_for_status()
         response_data = response.json()
         
         raw_items = response_data.get("data", []).get("jobs", [])
-        print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius.")
+		total_hits = response_data.get("estimated_results", response_data.get("total_results", "Unbekannt"))
+        print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius von insgesamt ca. {total_hits} Stellen.")
 		
         jobs = []
         for item in raw_items:
@@ -141,12 +143,10 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
                 "companyEmployeeCount": "N/A"
             })
             
-        scraped_total = len(jobs)
-        
         return {
             "jobs": jobs,
-            "linkedin_total": f"ca. {scraped_total} (JSearch)",
-            "scraped_total": scraped_total
+            "linkedin_total": f"ca. {total_hits} (JSearch)",
+            "scraped_total": len(jobs)
         }
     except Exception as e:
         print(f"❌ KRITISCH: Fallback über JSearch ebenfalls fehlgeschlagen: {e}")
@@ -227,33 +227,32 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
 
 # 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
 def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    # GEÄNDERT: Wir nutzen den offiziellen, stabilen API-Spiegel von bund.dev!
-    print(f"🔌 🇩🇪 [BUND.DEV PROXY ACTIVE] Starte stabile Suche ({distance_km} km) über bund.dev API-Spiegel...")
+    print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte synchrone V6-Abfrage ({distance_km} km) über Bundesagentur für Arbeit (Limit pro Suche: {fetch_limit})...")
     
-    # bund.dev spiegelt die BA-Suche direkt und ist global erreichbar
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json"
+        "X-API-Key": "jobboerse-jobsuche",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "de-DE,de;q=0.9"
     }
     
     zip_code = "".join(filter(str.isdigit, location)) or location
     jobs = []
     
     for title in search_titles:
-        # GEÄNDERT: bund.dev API-Endpoint für die Jobsuche v6
-        search_url = f"https://jobsuche.api.bund.dev/pc/v6/jobs"
+        search_url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
         params = {
             "was": title,
             "wo": zip_code,
             "umkreis": str(distance_km),
-            "arbeitszeit": "vz",
-            "veroeffentlichtseit": "14",
-            "befristung": "2",
-            "zeitarbeit": "false",
-            "pav": "false",
-            "angebotsart": "1",
+            "arbeitszeit": "vz",             # 'vz' (Vollzeit)
+            "veroeffentlichtseit": "14",     # Letzte 14 Tage
+            "befristung": "2",               # Nur unbefristete Festanstellungen
+            "zeitarbeit": "false",           # Keine Zeitarbeit
+            "pav": "false",                  # Keine Vermittler
+            "angebotsart": "1",              # Nur reguläre Jobs
             "page": "1",
-            "size": str(fetch_limit)
+            "size": str(fetch_limit)         # Limit pro Keyword-Abfrage
         }
         
         try:
@@ -264,19 +263,20 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
             search_results = response.json()
             
             raw_items = search_results.get("stellenangebote", [])
-            print(f"   ↳ '{title}': {len(raw_items)} echte BA-Treffer (via bund.dev) gefunden.")
+            print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden (API size: {fetch_limit}).")
             
             for item in raw_items:
                 ref_nr = item.get("referenznummer") or item.get("refnr")
                 if not ref_nr:
                     continue
                 
+                # Duplikate über die verschiedenen Suchen hinweg vermeiden
                 if any(job["url"].endswith(ref_nr) for job in jobs):
                     continue
                 
-                # Auch die Detailabfrage wird stabil gespiegelt
+                # Detailabfrage
                 encoded_ref = base64.b64encode(ref_nr.encode()).decode()
-                detail_url = f"https://jobsuche.api.bund.dev/pc/v4/jobdetails/{encoded_ref}"
+                detail_url = f"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{encoded_ref}"
                 
                 salary_val = item.get("gehalt", "N/A")
                 description = ""
@@ -314,11 +314,11 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
             continue
 
     scraped_total = len(jobs)
-    print(f"📥 Insgesamt {scraped_total} echte BA-Jobs geladen.")
+    print(f"📥 Insgesamt {scraped_total} eindeutige Jobs von der Bundesagentur geladen.")
     
     return {
         "jobs": jobs,
-        "linkedin_total": f"{scraped_total} (Arbeitsagentur via bund.dev)",
+        "linkedin_total": f"{scraped_total} (Arbeitsagentur)",
         "scraped_total": scraped_total
     }
 
@@ -503,7 +503,7 @@ async def main():
 		]
     
     # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
-    scraper_result = fetch_jobs_via_arbeitsagentur(
+    scraper_result = fetch_jobs_via_apify(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
         distance_km=30,
