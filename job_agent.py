@@ -177,7 +177,7 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
             "experienceLevel": ["entry", "associate", "mid-senior"]
         }
         
-        print(f"📥 Starte den LinkedIn-Scraper-Task...")
+        print("📥 Starte den LinkedIn-Scraper-Task...")
         run = client.actor("bebity/linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=180)
         
         print("📦 Lade strukturierte Ergebnisse herunter...")
@@ -227,63 +227,54 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
 
 # 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
 def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte synchrone Abfrage ({distance_km} km) über Bundesagentur für Arbeit (Limit: {fetch_limit})...")
-    
-    CLIENT_ID = "jobboerse-jobsuche"
-    
-    # Realistische Header, um den 403 Forbidden Block auf GitHub Actions zu umgehen!
+    print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte synchrone V6-Abfrage ({distance_km} km) über Bundesagentur für Arbeit (Limit pro Suche: {fetch_limit})...")
+
     headers = {
-        "X-API-Key": CLIENT_ID,
+        "X-API-Key": "jobboerse-jobsuche",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
+        "Accept-Language": "de-DE,de;q=0.9"
     }
     
     zip_code = "".join(filter(str.isdigit, location)) or location
-    size_per_title = max(5, int(fetch_limit / len(search_titles)))
     jobs = []
     
     for title in search_titles:
-        if len(jobs) >= fetch_limit:
-            break
-            
-        search_url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs"
+        search_url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
         params = {
             "was": title,
             "wo": zip_code,
             "umkreis": str(distance_km),
-            "arbeitszeit": "vz",             # 'vz' (Vollzeit) ist am stabilsten
-            "veroeffentlichtseit": "14",     # 14 Tage zur Erhöhung der Trefferquote
+            "arbeitszeit": "vz",             # 'vz' (Vollzeit)
+            "veroeffentlichtseit": "14",     # Letzte 14 Tage
             "befristung": "2",               # Nur unbefristete Festanstellungen
             "zeitarbeit": "false",           # Keine Zeitarbeit
             "pav": "false",                  # Keine Vermittler
             "angebotsart": "1",              # Nur reguläre Jobs
             "page": "1",
-            "size": str(size_per_title)
+            "size": str(fetch_limit)         # Limit pro Keyword-Abfrage
         }
         
         try:
-            # Synchroner Aufruf mit requests.get
-            response = requests.get(search_url, headers=headers, params=params, timeout=12)
+            response = requests.get(search_url, headers=headers, params=params, timeout=15)
             if response.status_code == 404:
                 continue
             response.raise_for_status()
             search_results = response.json()
             
             raw_items = search_results.get("stellenangebote", [])
-            print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden.")
+            print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden (API size: {fetch_limit}).")
             
             for item in raw_items:
-                if len(jobs) >= fetch_limit:
-                    break
-                    
-                ref_nr = item.get("refnr")
+                ref_nr = item.get("referenznummer") or item.get("refnr")
                 if not ref_nr:
                     continue
                 
+                # Duplikate über die verschiedenen Suchen hinweg vermeiden
                 if any(job["url"].endswith(ref_nr) for job in jobs):
                     continue
                 
+                # Detailabfrage
                 encoded_ref = base64.b64encode(ref_nr.encode()).decode()
                 detail_url = f"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{encoded_ref}"
                 
@@ -293,7 +284,6 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
                 experience_level = "Mid-Senior level"
                 
                 try:
-                    # Synchroner Aufruf mit requests.get
                     detail_resp = requests.get(detail_url, headers=headers, timeout=6)
                     if detail_resp.status_code == 200:
                         detail_data = detail_resp.json()
@@ -323,7 +313,6 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
             print(f"⚠️ Warnung bei Abfrage von '{title}': {e}")
             continue
 
-    jobs = jobs[:fetch_limit]
     scraped_total = len(jobs)
     print(f"📥 Insgesamt {scraped_total} eindeutige Jobs von der Bundesagentur geladen.")
     
@@ -510,9 +499,8 @@ async def main():
     # C. Wunschtitel
     WUNSCH_TITEL = [
         "Data Scientist", 
-        "AI Engineer",
-		"Entwickler Regelungsfunktionen"
-    ]
+        "AI Engineer"
+		]
     
     # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
     scraper_result = fetch_jobs_via_arbeitsagentur(
