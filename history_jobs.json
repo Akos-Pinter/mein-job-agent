@@ -361,5 +361,30 @@
         ],
         "url": "https://www.arbeitsagentur.de/jobsuche/job/10001-1003685161-S",
         "analyzed_at": "2026-10-15"
+    },
+    {
+        "score": 90,
+        "reason": "Auto 25 Min., ÖPNV 35 Min., gute Passung.",
+        "job_title": "Lead Consultant Data & AI Solutions (w|m|d)",
+        "company": "BridgingIT GmbH",
+        "company_employee_count": "700.000 Mitarbeiter",
+        "location": "Stuttgart",
+        "route_distance": "20 km",
+        "route_duration": "25 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Vollzeit",
+        "experience_level": "N/A",
+        "salary_source": "N/A",
+        "post_date": "2022-12-28",
+        "job_summary": "Lead Consultant für Data & AI, verantwortlich für Projekte, Kundenbetreuung, Teamführung.",
+        "required_qualifications": [
+            "Data Strategy",
+            "Cloud Platforms (AWS/Azure/GCP)",
+            "Data Engineering",
+            "Data Science",
+            "Team Leadership"
+        ],
+        "url": "https://www.arbeitsagentur.de/jobsuche/job/15835-00090300256002-S",
+        "analyzed_at": "2026-10-15"
     }
 ]
