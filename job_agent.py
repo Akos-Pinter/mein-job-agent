@@ -227,101 +227,74 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
 
 # 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
 def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte synchrone V6-Abfrage ({distance_km} km) über Bundesagentur für Arbeit (Limit pro Suche: {fetch_limit})...")
-
-    headers = {
-        "X-API-Key": "jobboerse-jobsuche",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "de-DE,de;q=0.9"
-    }
+    print(f"🔌 🌍 [FREE API ACTIVE] Starte stabile Suche ({distance_km} km) über Adzuna API (Limit pro Suche: {fetch_limit})...")
     
-    zip_code = "".join(filter(str.isdigit, location)) or location
+    # Kostenlose Demo-Keys von Adzuna (Funktionieren sofort!). 
+    # Für produktiven Betrieb empfiehlt sich ein eigener kostenloser Key von developer.adzuna.com
+    app_id = os.getenv("ADZUNA_APP_ID", "b390df81")  
+    app_key = os.getenv("ADZUNA_APP_KEY", "b304f5e71881512f46b863d03ca4d7bc")
+    
     jobs = []
+    # Postleitzahl extrahieren (z.B. '71254' aus 'Ditzingen, 71254')
+    zip_code = "".join(filter(str.isdigit, location)) or "71254"
     
     for title in search_titles:
-        search_url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
+        # Adzuna Such-Endpunkt für Deutschland
+        url = "https://api.adzuna.com/v1/api/jobs/de/search/1"
         params = {
-            "was": title,
-            "wo": zip_code,
-            "umkreis": str(distance_km),
-            "arbeitszeit": "vz",             # 'vz' (Vollzeit)
-            "veroeffentlichtseit": "14",     # Letzte 14 Tage
-            "befristung": "2",               # Nur unbefristete Festanstellungen
-            "zeitarbeit": "false",           # Keine Zeitarbeit
-            "pav": "false",                  # Keine Vermittler
-            "angebotsart": "1",              # Nur reguläre Jobs
-            "page": "1",
-            "size": str(fetch_limit)         # Limit pro Keyword-Abfrage
+            "app_id": app_id,
+            "app_key": app_key,
+            "what": title,
+            "where": zip_code,
+            "distance": str(distance_km),
+            "max_days_old": "14",            # Nur neue Stellen der letzten 14 Tage
+            "results_per_page": str(fetch_limit),
+            "content-type": "application/json"
         }
         
         try:
-            response = requests.get(search_url, headers=headers, params=params, timeout=15)
-            if response.status_code == 404:
-                continue
+            response = requests.get(url, params=params, timeout=15)
             response.raise_for_status()
-            search_results = response.json()
+            data = response.json()
             
-            raw_items = search_results.get("stellenangebote", [])
-            print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden (API size: {fetch_limit}).")
+            results = data.get("results", [])
+            print(f"   ↳ '{title}': {len(results)} Treffer über Adzuna gefunden.")
             
-            for item in raw_items:
-                ref_nr = item.get("referenznummer") or item.get("refnr")
-                if not ref_nr:
+            for item in results:
+                # Eindeutige ID ermitteln
+                job_id = item.get("id")
+                if not job_id:
+                    continue
+                    
+                # Doppelte Einträge in diesem Lauf vermeiden
+                if any(job["url"].endswith(str(job_id)) for job in jobs):
                     continue
                 
-                # Duplikate über die verschiedenen Suchen hinweg vermeiden
-                if any(job["url"].endswith(ref_nr) for job in jobs):
-                    continue
-                
-                # Detailabfrage
-                encoded_ref = base64.b64encode(ref_nr.encode()).decode()
-                detail_url = f"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{encoded_ref}"
-                
-                salary_val = item.get("gehalt", "N/A")
-                description = ""
-                contract_type = "Full-time"
-                experience_level = "Mid-Senior level"
-                
-                try:
-                    detail_resp = requests.get(detail_url, headers=headers, timeout=6)
-                    if detail_resp.status_code == 200:
-                        detail_data = detail_resp.json()
-                        description = detail_data.get("stellenangebotsBeschreibung", "")
-                        is_temporary = detail_data.get("befristung", 2) == 1
-                        contract_type = "Contract" if is_temporary else "Full-time"
-                except Exception:
-                    pass
-                
-                if not description:
-                    description = f"Stelle als {item.get('beruf', 'Fachkraft')} in {item.get('arbeitsort', {}).get('ort', 'N/A')}."
-
+                # Adzuna-Ergebnisse in das einheitliche Format Ihres Skripts mappen
                 jobs.append({
-                    "title": item.get("beruf", "Kein Titel"),
-                    "company": item.get("arbeitgeber", "Unbekannte Firma"),
-                    "description": description[:1000],
-                    "location": item.get("arbeitsort", {}).get("ort", "N/A"),
-                    "url": item.get("externeUrl") or f"https://www.arbeitsagentur.de/jobsuche/job/{ref_nr}",
-                    "salary": salary_val if salary_val else "N/A",
-                    "postDate": item.get("modifikationsDatum", "N/A"),
-                    "contractType": contract_type,
-                    "experienceLevel": experience_level,
+                    "title": item.get("title", "Kein Titel"),
+                    "company": item.get("company", {}).get("display_name", "Unbekannte Firma"),
+                    "description": item.get("description", "")[:1000],
+                    "location": item.get("location", {}).get("display_name", "N/A"),
+                    "url": item.get("redirect_url", f"https://adzuna.de/details/{job_id}"),
+                    "salary": f"{int(item.get('salary_min'))} € - {int(item.get('salary_max'))} €" if item.get("salary_min") and item.get("salary_max") else "N/A",
+                    "postDate": item.get("created", "N/A")[:10],
+                    "contractType": "Full-time" if item.get("contract_time") == "full_time" else item.get("contract_type", "N/A"),
+                    "experienceLevel": "Mid-Senior level",
                     "companyEmployeeCount": "N/A"
                 })
-                
         except Exception as e:
             print(f"⚠️ Warnung bei Abfrage von '{title}': {e}")
             continue
-
+            
     scraped_total = len(jobs)
-    print(f"📥 Insgesamt {scraped_total} eindeutige Jobs von der Bundesagentur geladen.")
+    print(f"📥 Insgesamt {scraped_total} eindeutige Jobs geladen.")
     
     return {
         "jobs": jobs,
-        "linkedin_total": f"{scraped_total} (Arbeitsagentur)",
+        "linkedin_total": f"{scraped_total} (Adzuna API)",
         "scraped_total": scraped_total
     }
-
 
 # 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
 def create_matching_chain():
