@@ -386,5 +386,30 @@
         ],
         "url": "https://www.arbeitsagentur.de/jobsuche/job/15835-00090300256002-S",
         "analyzed_at": "2026-10-15"
+    },
+    {
+        "score": 90,
+        "reason": "Auto 25 Min, ÖPNV 35 Min, AI fit.",
+        "job_title": "AI Engineer (w|m|d)",
+        "company": "BridgingIT GmbH",
+        "company_employee_count": "N/A",
+        "location": "Stuttgart",
+        "route_distance": "20 km",
+        "route_duration": "25 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Vollzeit",
+        "experience_level": "N/A",
+        "salary_source": "JAHRESGEHALT",
+        "post_date": "2023-03-30",
+        "job_summary": "AI Engineer supporting AI projects, developing LLMs, OCR, automation.",
+        "required_qualifications": [
+            "Python",
+            "Machine Learning",
+            "TensorFlow/PyTorch",
+            "Cloud (AWS/GCP/Azure)",
+            "German C1"
+        ],
+        "url": "https://www.arbeitsagentur.de/jobsuche/job/15835-000903004c9001-S",
+        "analyzed_at": "2026-10-15"
     }
 ]
