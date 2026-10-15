@@ -261,5 +261,30 @@
         ],
         "url": "https://www.learn4good.com/jobs/stuttgart/deutschland/informationstechnik_and_it/5546886160/g/",
         "analyzed_at": "2026-10-15"
+    },
+    {
+        "score": 85,
+        "reason": "Auto 30 Min, ÖPNV 35 Min, gute Erreichbarkeit, starkes ML‑Background, passt gut.",
+        "job_title": "Data Scientist (m/w/d)",
+        "company": "YER Deutschland",
+        "company_employee_count": "N/A",
+        "location": "Stuttgart",
+        "route_distance": "25 km",
+        "route_duration": "30 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Full-time",
+        "experience_level": "Entry level",
+        "salary_source": "N/A",
+        "post_date": "2026-09-21",
+        "job_summary": "Entwicklung von Prognosemodellen, Regressions- und Monte-Carlo-Analysen.",
+        "required_qualifications": [
+            "Python",
+            "Machine Learning",
+            "Statistical Modeling",
+            "Data Analysis",
+            "Monte Carlo Simulation"
+        ],
+        "url": "https://www.yer.de/de/jobangebote/data-scientist-mwd-stuttgart-3211/",
+        "analyzed_at": "2026-10-15"
     }
 ]
