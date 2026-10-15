@@ -236,5 +236,30 @@
         ],
         "url": "https://www.learn4good.com/jobs/deutschland/informationstechnik_and_it/5546328203/g/",
         "analyzed_at": "2026-10-15"
+    },
+    {
+        "score": 80,
+        "reason": "Auto 30 Min, ÖPNV 35 Min – gut erreichbar, Kandidat überqualifiziert, aber Erfahrung passt.",
+        "job_title": "Principal Data Scientist, Detection",
+        "company": "Showcify",
+        "company_employee_count": "N/A",
+        "location": "Stuttgart",
+        "route_distance": "20 km",
+        "route_duration": "30 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Vollzeit",
+        "experience_level": "Entry level",
+        "salary_source": "N/A",
+        "post_date": "2026-10-14",
+        "job_summary": "Lead data science projects for detection systems. Drive ML model development and deployment in a fast‑paced environment.",
+        "required_qualifications": [
+            "Python programming",
+            "Machine Learning & Deep Learning",
+            "Cloud platforms (AWS/GCP)",
+            "Data engineering skills",
+            "Strong analytical and problem‑solving abilities"
+        ],
+        "url": "https://www.learn4good.com/jobs/stuttgart/deutschland/informationstechnik_and_it/5546886160/g/",
+        "analyzed_at": "2026-10-15"
     }
 ]
