@@ -231,13 +231,10 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
     print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte synchrone V6-Abfrage ({distance_km} km) über Bundesagentur für Arbeit (Limit pro Suche: {fetch_limit})...")
     
     headers = {
-        "X-API-Key": "jobboerse-jobsuche",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "de-DE,de;q=0.9"
+        "X-API-Key": "jobboerse-jobsuche"
     }
     
-    zip_code = "".join(filter(str.isdigit, location)) or location
+    zip_code = "".join(filter(str.isdigit, location)) or '71254'
     jobs = []
     
     for title in search_titles:
@@ -247,7 +244,7 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
             "wo": zip_code,
             "umkreis": str(distance_km),
             "arbeitszeit": "vz",             # 'vz' (Vollzeit)
-            "veroeffentlichtseit": "14",     # Letzte 14 Tage
+            #"veroeffentlichtseit": "14",     # Letzte 14 Tage
             "befristung": "2",               # Nur unbefristete Festanstellungen
             "zeitarbeit": "false",           # Keine Zeitarbeit
             "pav": "false",                  # Keine Vermittler
@@ -504,7 +501,7 @@ async def main():
 		]
     
     # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
-    scraper_result = await fetch_jobs_via_apify(
+    scraper_result = await fetch_jobs_via_arbeitsagentur(
         search_titles=WUNSCH_TITEL, 
         location=MY_HOME_LOCATION, 
         distance_km=30,
