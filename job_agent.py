@@ -23,7 +23,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 # 📍 IHR WOHNORT
-MY_HOME_LOCATION = "Ditzingen, Baden-Württemberg, Germany"
+MY_HOME_LOCATION = "Ditzingen, 71254, Baden-Württemberg, Germany"
 HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
 JOB_LIFETIME_DAYS = 14 
@@ -227,13 +227,13 @@ async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance
 
 # 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
 def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-	print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte Abfrage ({distance_km} km) über Bundesagentur für Arbeit...")
+    print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte Abfrage ({distance_km} km) über Bundesagentur für Arbeit...")
     
     headers = {
         "X-API-Key": "jobboerse-jobsuche",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    
+        }
+        
     # Wir extrahieren nur die Postleitzahl (z.B. '71254' aus 'Ditzingen, 71254') für die Suche
     zip_code = "".join(filter(str.isdigit, location)) or location
     
@@ -242,7 +242,7 @@ def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, dista
     # Da die BA-API keine komplexen OR-Kombinationen in 'was' mag, fragen wir die Titel einzeln ab
     for title in search_titles:
         search_url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs"
-		params = {
+        params = {
 		    "was": title,
 		    "wo": zip_code,
 		    "umkreis": str(distance_km),
