@@ -233,10 +233,11 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
         
         run = client.actor("curious_coder/linkedin-jobs-scraper").call(run_input=run_input)
         raw_items = client.dataset(run["defaultDatasetId"]).list_items().items
-        print(f"📥 Apify LinkedIn lieferte {len(raw_items)} Treffer")
   
         jobs = []
         for item in raw_items:
+			if item.get("seniorityLevel") == "Not Applicable":
+				continue
             jobs.append({
                 "title": item.get("title", "N/A"),
                 "company": item.get("companyName", "N/A"),
@@ -250,7 +251,8 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
                 "companyEmployeeCount": item.get("companyEmployeesCount", "N/A"),
                 "api": "Apify LinkedIn"
             })
-        
+        print(f"📥 Apify LinkedIn lieferte {len(jobs)} Treffer")
+		
         return {
             "jobs": jobs,
             "scraped_total": len(jobs)
