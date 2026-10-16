@@ -50,5 +50,31 @@
         "url": "https://de.indeed.com/viewjob?jk=dd855de488b2a662",
         "api": "Apify Indeed",
         "analyzed_at": "2026-10-16"
+    },
+    {
+        "score": 90,
+        "reason": "Stuttgart 20 km, 25 min Auto, 35 min ÖPNV, strong fit.",
+        "job_title": "Data Engineer",
+        "company": "Booz Allen Hamilton",
+        "company_employee_count": "N/A",
+        "location": "Stuttgart",
+        "route_distance": "20 km",
+        "route_duration": "25 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Full-time",
+        "experience_level": "N/A",
+        "salary_source": "99.000 - 225.000 EUR",
+        "post_date": "2026-10-07",
+        "job_summary": "Data engineer role focusing on ML pipelines, data science, and AI solutions.",
+        "required_qualifications": [
+            "Python",
+            "SQL",
+            "Machine Learning",
+            "Data Engineering",
+            "Distributed systems"
+        ],
+        "url": "https://de.indeed.com/viewjob?jk=1020c46cff7f2ed1",
+        "api": "Apify Indeed",
+        "analyzed_at": "2026-10-16"
     }
 ]
