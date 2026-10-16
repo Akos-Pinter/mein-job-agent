@@ -411,5 +411,30 @@
         ],
         "url": "https://www.arbeitsagentur.de/jobsuche/job/15835-000903004c9001-S",
         "analyzed_at": "2026-10-15"
+    },
+    {
+        "score": 90,
+        "reason": "Starke KI- und Python-Kenntnisse, Homeoffice passt, Pendelzeit kurz.",
+        "job_title": "Dozent / Lehrkraft (m/w/d) für KI, Python & Data Analytics",
+        "company": "Zusammen mit der Ukraine e.V.",
+        "company_employee_count": "N/A",
+        "location": "100 % Homeoffice",
+        "route_distance": "20 km",
+        "route_duration": "25 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Vollzeit",
+        "experience_level": "N/A",
+        "salary_source": "STUNDENLOHN",
+        "post_date": "2026-10-16",
+        "job_summary": "Dozent für KI, Python & Data Analytics, 100% Homeoffice, Entwicklung von AZAV-Kursen.",
+        "required_qualifications": [
+            "Python",
+            "KI/LLMs und Prompt Engineering",
+            "Data Analytics",
+            "Cloud Computing",
+            "Erfahrung als Dozent"
+        ],
+        "url": "https://www.arbeitsagentur.de/jobsuche/job/10001-1003870455-S",
+        "analyzed_at": "2026-10-16"
     }
 ]
