@@ -236,8 +236,8 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
   
         jobs = []
         for item in raw_items:
-			if item.get("seniorityLevel") == "Not Applicable":
-				continue
+            if item.get("seniorityLevel") == "Not Applicable":
+                continue
             jobs.append({
                 "title": item.get("title", "N/A"),
                 "company": item.get("companyName", "N/A"),
