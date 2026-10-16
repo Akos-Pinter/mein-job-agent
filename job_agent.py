@@ -109,7 +109,7 @@ async def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distan
         "num_pages": str(min(max(1, -(-fetch_limit // 10)), 20)),
         "country": "de",
         "work_from_home": True,
-        "date_posted": "today", # Options: today, 3days, week, month, all
+        "date_posted": "3days", # Options: today, 3days, week, month, all
         "employment_types": "FULLTIME",
         "job_requirements": "more_than_3_years_experience",
         "radius": str(distance_km)
@@ -149,7 +149,7 @@ async def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distan
             "scraped_total": len(jobs)
         }
     except Exception as e:
-        print(f"❌ KRITISCH: JSearch Suche fehlgeschlagen: {e}")
+        print(f"⚠️ Warnung: JSearch Suche fehlgeschlagen: {e}")
         return {"jobs": [], "scraped_total": 0}
 
 
@@ -171,14 +171,14 @@ async def fetch_jobs_via_apify_indeed(search_titles: List[str], location: str, d
             "maxItems": fetch_limit,
             "radius": str(distance_km),
             "radiusUnit": "km", 
-            "fromDays": "1", # Options: 1, 3, 7, 14
+            "fromDays": "14", # Options: 1, 3, 7, 14
             "jobType": "fulltime",
             "remote": "hybrid",
             "searchMode": "rich"   
         }
         
         run = client.actor("kaix/indeed-scraper").call(run_input=run_input)
-        raw_items = client.dataset(run.default_dataset_id).list_items().items
+        raw_items = client.dataset(run["defaultDatasetId"]).list_items().items
         print(f"📥 Apify Indeed lieferte {len(raw_items)} Treffer")
   
         jobs = []
@@ -208,7 +208,7 @@ async def fetch_jobs_via_apify_indeed(search_titles: List[str], location: str, d
             "scraped_total": len(jobs)
         }
     except Exception as e:
-        print(f"❌ KRITISCH: Apify Indeed Suche fehlgeschlagen: {e}")
+        print(f"⚠️ Warnung: Apify Indeed Suche fehlgeschlagen: {e}")
         return {"jobs": [], "scraped_total": 0}
 
 
@@ -232,7 +232,7 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
         }
         
         run = client.actor("curious_coder/linkedin-jobs-scraper").call(run_input=run_input)
-        raw_items = client.dataset(run.default_dataset_id).list_items().items
+        raw_items = client.dataset(run["defaultDatasetId"]).list_items().items
         print(f"📥 Apify LinkedIn lieferte {len(raw_items)} Treffer")
   
         jobs = []
@@ -256,7 +256,7 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
             "scraped_total": len(jobs)
         }
     except Exception as e:
-        print(f"❌ KRITISCH: Apify LinkedIn Suche fehlgeschlagen: {e}")
+        print(f"⚠️ Warnung: Apify LinkedIn Suche fehlgeschlagen: {e}")
         return {"jobs": [], "scraped_total": 0}
 
 
@@ -277,6 +277,7 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
             "wo": zip_code,
             "umkreis": str(distance_km),
             "arbeitszeit": "vz",
+			"veroeffentlichtseit": "14",
             "befristung": "2",
             "zeitarbeit": "false",
             "pav": "false",
