@@ -436,5 +436,31 @@
         ],
         "url": "https://www.arbeitsagentur.de/jobsuche/job/10001-1003870455-S",
         "analyzed_at": "2026-10-16"
+    },
+    {
+        "score": 75,
+        "reason": "Gute Erreichbarkeit, Python‑Kenntnisse passen, fehlende Forensik‑Erfahrung.",
+        "job_title": "Sachbearbeiter/-in (w/m/d) Operative Analyse",
+        "company": "Polizeipräsidium Stuttgart",
+        "company_employee_count": "N/A",
+        "location": "Eichwiesenring 14, 70567 Stuttgart",
+        "route_distance": "25 km",
+        "route_duration": "35 Min. Autofahrt",
+        "route_transit": "35 Min. mit ÖPNV",
+        "contract_type": "Vollzeit",
+        "experience_level": "N/A",
+        "salary_source": "N/A",
+        "post_date": "2026-10-06",
+        "job_summary": "Analyse von digitalen Spuren, Erstellung von gerichtsfesten Berichten, Entwicklung von IT‑Lösungen.",
+        "required_qualifications": [
+            "Python",
+            "Java",
+            "VBA",
+            "Datenanalyse",
+            "Forensik"
+        ],
+        "url": "https://www.arbeitsagentur.de/jobsuche/job/10001-1003809345-S",
+        "api": "BfA",
+        "analyzed_at": "2026-10-16"
     }
 ]
