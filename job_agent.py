@@ -88,13 +88,10 @@ def extract_profile_from_pdf(pdf_path="lebenslauf.pdf"):
         sys.exit(1)
 
 
-# 4.1 Fallback-Sourcing über RapidAPI JSearch
-def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    print(f"🔌 ⚙️ [FALLBACK AKTIV] Starte Umkreis-Abfrage ({distance_km} km) über RapidAPI JSearch...")
+# 4.1 Job-Abfrage über RapidAPI JSearch
+async def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
+    print("Starte Job Abfrage über RapidAPI JSearch...")
     api_key = os.getenv("RAPIDAPI_KEY")
-    if not api_key:
-        print("❌ KRITISCHER FEHLER: RAPIDAPI_KEY nicht in den Secrets hinterlegt! Fallback unmöglich.")
-        sys.exit(1)
         
     url = "https://jsearch.p.rapidapi.com/search-v2"
     headers = {
@@ -102,15 +99,17 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         "x-rapidapi-host": "jsearch.p.rapidapi.com"
     }
 	
-    required_pages = min(max(1, -(-fetch_limit // 10)), 20)
     titles_query = " OR ".join(f'"{title}"' for title in search_titles)
     params = {
         "query": f"{titles_query} in {location}",
+        "location": location,
+        "num_pages": str(min(max(1, -(-fetch_limit // 10)), 20)), # Required number of pages derived from fetch limit (each page contains up to 10 jobs)
 		"country": "de",
-        "num_pages": str(required_pages),
-		"radius": str(distance_km),
-		#"employment_types": "FULLTIME,PARTTIME,CONTRACTOR",
-		#"job_requirements": "under_3_years_experience,3_to_7_years_experience"
+        "work_from_home": True,
+        "date_posted": "week", # Options: all, today, 3days, week, month
+		"employment_types": "FULLTIME", # Options: FULLTIME, CONTRACTOR, PARTTIME, INTERN
+		"job_requirements": "more_than_3_years_experience", # Options: under_3_years_experience, more_than_3_years_experience, no_experience, no_degree
+        "radius": str(distance_km)
 		}
 	
     try:
@@ -119,116 +118,141 @@ def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km:
         response_data = response.json()
         
         raw_items = response_data.get("data", []).get("jobs", [])
-        total_hits = response_data.get("estimated_results", response_data.get("total_results", "Unbekannt"))
-        print(f"📥 JSearch lieferte {len(raw_items)} gefilterte Treffer im {distance_km}-km-Radius von insgesamt ca. {total_hits} Stellen.")
+        print(f"📥 JSearch lieferte {len(raw_items)} Treffer")
 		
         jobs = []
         for item in raw_items:
-            # Gehaltsspanne formatieren
+            # Gehaltsspanne/Gehalt formatieren
             min_sal = item.get("job_min_salary")
             max_sal = item.get("job_max_salary")
             currency = item.get("job_salary_currency", "EUR")
-            salary_str = f"{min_sal:,} - {max_sal:,} {currency}".replace(",", ".") if min_sal and max_sal else "N/A"
+            salary_str = f"{min_sal:,} - {max_sal:,} {currency}".replace(",", ".") if min_sal and max_sal else item.get("job_salary", "N/A")
             
             # Mapping der Felder zu unserem einheitlichen Format
             jobs.append({
                 "title": item.get("job_title", "Kein Titel"),
                 "company": item.get("employer_name", "Unbekannte Firma"),
                 "description": item.get("job_description", "")[:5000],
-                "location": f"{item.get('job_city', '')}, {item.get('job_state', '')}".strip(", "),
-                "url": item.get("job_apply_link", item.get("job_google_link", "https://linkedin.com")),
+                "location": item.get('job_city', ''),
+                "url": item.get("job_apply_link", item.get("job_google_link", "N/A")),
                 "salary": salary_str,
-                "postDate": item.get("job_posted_at_datetime_utc", "N/A")[:10] if item.get("job_posted_at_datetime_utc") else "N/A",
-                "contractType": "Full-time" if item.get("job_employment_type") == "FULLTIME" else item.get("job_employment_type", "N/A"),
-                "experienceLevel": "Mid-Senior level" if item.get("job_required_experience", {}).get("required_experience_in_months") else "Entry level",
+                "postDate": item.get("job_posted_at_datetime_utc", "N/A")[:10],
+                "contractType": item.get("job_employment_type", "N/A"),
+                "experienceLevel": "N/A",
                 "companyEmployeeCount": "N/A"
             })
             
         return {
             "jobs": jobs,
-            "linkedin_total": f"ca. {total_hits} (JSearch)",
             "scraped_total": len(jobs)
         }
+    
     except Exception as e:
-        print(f"❌ KRITISCH: Fallback über JSearch ebenfalls fehlgeschlagen: {e}")
-        sys.exit(1)
+        print(f"❌ KRITISCH: JSearch Suche fehlgeschlagen: {e}")
 
 
-# 4.2 Job-Abfrage über den stabilen Python Apify-Client (Mit automatischem JSearch-Fallback)
-async def fetch_jobs_via_apify(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]:
-    distance_miles = int(distance_km * 0.62)
-    
-    print(f"🔌 Rufe aktuelle Jobs (Sourcing-Limit: {fetch_limit}) für {search_titles} im Umkreis von {distance_km} km um '{location}' ab...")
+# 4.2 Job-Abfrage über Python Apify-Client
+async def fetch_jobs_via_apify_indeed(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]:  
+    print("Starte Job Abfrage über Apify Indeed Search...")
     token = os.getenv("APIFY_API_TOKEN")
-    
-    if not token:
-        print("⚠️ APIFY_API_TOKEN nicht gefunden! Weiche direkt auf JSearch-Fallback aus.")
-        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km, fetch_limit=fetch_limit)
         
     client = ApifyClient(token)
     try:
+        titles_query = " OR ".join(f'"{title}"' for title in search_titles)
         run_input = {
-            "titles": search_titles,      
-            "locations": [location],       
-            "distance": distance_miles,    
-            "limit": fetch_limit,             
-            "publishedAt": "r604800", # Letzte 7 Tage
-            "enrichCompany": True,
-            "jobType": ["full-time", "part-time", "contract"],
-            "experienceLevel": ["entry", "associate", "mid-senior"]
+            "keyword": titles_query,
+            "location": location, 
+            "country": "DE",
+            "maxItems": fetch_limit,
+            "radius": str(distance_km),
+            "radiusUnit": "km", 
+            "fromDays": "14", # Options: 1, 3, 7, 14
+            "jobType": "fulltime", # Options:  fulltime, parttime, contract, temporary, internship
+            "remote": "hybrid", # Options:  remote, hybrid
+            "searchMode": "rich"   
         }
         
-        print("📥 Starte den LinkedIn-Scraper-Task...")
-        run = client.actor("bebity/linkedin-jobs-scraper").call(run_input=run_input, timeout_secs=180)
-        
-        print("📦 Lade strukturierte Ergebnisse herunter...")
-        dataset = client.dataset(run["defaultDatasetId"])
-        dataset_list = dataset.list_items()
-        dataset_items = dataset_list.items
-        
-        linkedin_search_totals = "Unbekannt"
-        try:
-            kvs = client.key_value_store(run["defaultKeyValueStoreId"])
-            for _ in range(2):
-                search_totals_record = kvs.get_record("SEARCH_TOTALS")
-                if search_totals_record and "value" in search_totals_record:
-                    linkedin_search_totals = str(search_totals_record["value"])
-                    break
-                import time
-                time.sleep(1.5)
-        except Exception:
-            pass
-        
+        run = client.actor("kaix/indeed-scraper").call(run_input=run_input)
+        raw_items = client.dataset(run.default_dataset_id).list_items().items
+        print(f"📥 Apify Indeed lieferte {len(raw_items)} Treffer")
+  
         jobs = []
-        for item in dataset_items:
+        for item in raw_items:
+            # Gehaltsspanne/Gehalt formatieren
+            min_sal = item.get("salary").get("min")
+            max_sal = item.get("salary").get("max")
+            currency = item.get("salary").get("currency", "EUR")
+            salary_str = f"{min_sal:,} - {max_sal:,} {currency}".replace(",", ".") if min_sal and max_sal else item.get("salary").get("text", "N/A")
+            
+            # Mapping der Felder zu unserem einheitlichen Format
             jobs.append({
-                "title": item.get("title", item.get("job_title", "Kein Titel")),
-                "company": item.get("companyName", item.get("company", "Unbekannte Firma")),
-                "description": item.get("description", "")[:5000],
-                "location": item.get("location", "N/A"),
-                "url": item.get("url", item.get("jobUrl", "https://linkedin.com")),
-                "salary": item.get("salary", item.get("salarySource", "N/A")),
-                "postDate": item.get("postDate", item.get("postedAt", "N/A")),
-                "contractType": item.get("contractType", "N/A"),
-                "experienceLevel": item.get("experienceLevel", "N/A"),
-                "companyEmployeeCount": item.get("companyEmployeeCount", "N/A")
+                "title": item.get("title").get("text", "N/A"),
+                "company": item.get("company").get("name", "N/A"),
+                "description": item.get("description").get("text", "N/A")[:5000],
+                "location": item.get("location").get("city", "N/A"),
+                "url": item.get("urls").get("indeed", "N/A"),
+                "salary": salary_str,
+                "postDate": item.get("dates").get("posted", "N/A"),
+                "contractType": item.get("classification").get("jobType", "N/A"),
+                "experienceLevel": "N/A",
+                "companyEmployeeCount": "N/A"
             })
-
-        scraped_total = len(jobs)
         
         return {
             "jobs": jobs,
-            "linkedin_total": linkedin_search_totals,
-            "scraped_total": scraped_total
+            "scraped_total": len(jobs)
         }
         
     except Exception as e:
-        print(f"⚠️ Apify-Fehler aufgetreten: {e}. Weiche automatisch auf JSearch aus...")
-        return fetch_jobs_via_jsearch(search_titles=search_titles, location=location, distance_km=distance_km, fetch_limit=fetch_limit)
+        print(f"❌ KRITISCH: Apify Indeed Suche fehlgeschlagen: {e}")
 
-# 4.3 Kostenlose Abfrage der offiziellen Jobbörse (Bundesagentur für Arbeit)
+async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]: 
+    print("Starte Job Abfrage über Apify LinkedIn Search...")
+    token = os.getenv("APIFY_API_TOKEN")
+        
+    client = ApifyClient(token)
+    try:
+        titles_query = " OR ".join(f'"{title}"' for title in search_titles)
+        run_input = {
+            "keywords": titles_query,
+            "location": location,       
+            "distance": int(distance_km * 0.62), # Entfernung in Milen
+            "datePosted": "pastWeek",
+            "limitPerSource": fetch_limit, 
+        }
+        
+        run = client.actor("curious_coder/linkedin-jobs-scraper").call(run_input=run_input)
+        raw_items = client.dataset(run.default_dataset_id).list_items().items
+        print(f"📥 Apify LinkedIn lieferte {len(raw_items)} Treffer")
+  
+        jobs = []
+        for item in raw_items:
+            # Mapping der Felder zu unserem einheitlichen Format
+            jobs.append({
+                "title": item.get("title", "N/A"),
+                "company": item.get("companyName", "N/A"),
+                "description": item.get("descriptionText", "")[:5000],
+                "location": "N/A" if item.get("companyAddress") is None else item.get("companyAddress").get("addressLocality", "N/A"),
+                "url": item.get("link", "https://linkedin.com"),
+                "salary": item.get("salary", "N/A"),
+                "postDate": item.get("postedAt", "N/A"),
+                "contractType": item.get("employmentType", "N/A"),
+                "experienceLevel": item.get("seniorityLevel", "N/A"),
+                "companyEmployeeCount": item.get("companyEmployeesCount", "N/A")
+            })
+        
+        return {
+            "jobs": jobs,
+            "scraped_total": len(jobs)
+        }
+        
+    except Exception as e:
+        print(f"❌ KRITISCH: Apify LinkedIn Suche fehlgeschlagen: {e}")
+
+    
+# 4.3 Job-Abfrage über die offiziellen Jobbörse (Bundesagentur für Arbeit)
 async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    print(f"🔌 🇩🇪 [FREE API ACTIVE] Starte synchrone V6-Abfrage ({distance_km} km) über Bundesagentur für Arbeit (Limit pro Suche: {fetch_limit})...")
+    print("Starte Job Abfrage über Bundesagentur für Arbeit...")
     
     headers = {
         "X-API-Key": "jobboerse-jobsuche"
@@ -261,7 +285,7 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
             search_results = response.json()
             
             raw_items = search_results.get("ergebnisliste", [])
-            print(f"   ↳ '{title}': {len(raw_items)} Treffer gefunden (API size: {fetch_limit}).")
+            print(f"📥 BfA lieferte {len(raw_items)} Treffer")
             
             for item in raw_items:
                 ref_nr = item.get("referenznummer", "")	
@@ -296,8 +320,8 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
                     arbeitszeit = "N/A"
 				
                 jobs.append({
-				    "title": item.get("stellenangebotsTitel", "Kein Titel"),
-				    "company": item.get("firma", "Unbekannte Firma"),
+				    "title": item.get("stellenangebotsTitel", "N/A"),
+				    "company": item.get("firma", "N/A"),
 				    "description": description[:5000],
 				    "location": ort_name,
 				    "url": item.get("externeUrl") or f"https://www.arbeitsagentur.de/jobsuche/job/{ref_nr}",
@@ -309,16 +333,12 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
 				})
 				                
         except Exception as e:
-            print(f"⚠️ Warnung bei Abfrage von '{title}': {e}")
+            print(f"⚠️ Warnung: Suche für {title} über Bundesagentur für Arbeit fehlgeschlagen: {e}")
             continue
-
-    scraped_total = len(jobs)
-    print(f"📥 Insgesamt {scraped_total} eindeutige Jobs von der Bundesagentur geladen.")
     
     return {
         "jobs": jobs,
-        "linkedin_total": f"{scraped_total} (Arbeitsagentur)",
-        "scraped_total": scraped_total
+        "scraped_total": len(jobs)
     }
 
 
@@ -357,7 +377,7 @@ def create_matching_chain():
 
 
 # 6. E-Mail Versendungsfunktion (HTML)
-def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, Any]], linkedin_total: str, scraped_total: int, test_mode: bool = False):
+def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, Any]], scraped_total: int, test_mode: bool = False):
     sender_email = os.getenv("EMAIL_SENDER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     receiver_email = os.getenv("EMAIL_RECEIVER")
@@ -401,7 +421,6 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
             
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #1e3a8a; margin-bottom: 20px;">
                 📊 <b>Echtzeit-Stellenmarkt-Statistik für dich:</b><br>
-                • Insgesamt passende Stellen auf LinkedIn vorhanden: <b>{linkedin_total if not test_mode else 'Inaktiv (im Testmodus)'}</b><br>
                 • Davon für diesen Bericht live geladen: <b>{scraped_total}</b><br>
                 • Neu hinzugekommene und analysierte Treffer: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
                 • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b> (Aufbewahrung: {JOB_LIFETIME_DAYS} Tage)
@@ -501,17 +520,21 @@ async def main():
         "AI Engineer"
 		]
     
-    # D. Aktuelle Live-Stellen abrufen (Fällt bei Apify-Fehlern automatisch auf JSearch zurück)
-    scraper_result = await fetch_jobs_via_arbeitsagentur(
-        search_titles=WUNSCH_TITEL, 
-        location=MY_HOME_LOCATION, 
-        distance_km=30,
-        fetch_limit=FETCH_LIMIT
-    )
+    # D. Aktuelle Live-Stellen abrufen
+	raw_jobs = []
+    nr_jobs = []
+    for suche in [fetch_jobs_via_jsearch, fetch_jobs_via_apify_indeed, fetch_jobs_via_apify_linkedin, fetch_jobs_via_arbeitsagentur]:
+        scraper_result = await suche(
+		    search_titles=WUNSCH_TITEL, 
+            location=MY_HOME_LOCATION, 
+            distance_km=30,
+            fetch_limit=FETCH_LIMIT)
+			
+        raw_jobs.extend(scraper_result["jobs"])
+        nr_jobs.append(scraper_result["scraped_total"])
     
     raw_jobs = scraper_result["jobs"]
-    linkedin_total = scraper_result["linkedin_total"]
-    scraped_total = scraper_result["scraped_total"]
+    scraped_total = sum(nr_jobs)
     
     if not raw_jobs:
         print("❌ Keine Jobs empfangen. Breche ab.")
@@ -593,7 +616,6 @@ async def main():
     send_email_report(
         new_jobs=new_analyzed_jobs,
         old_jobs=cleaned_history,
-        linkedin_total=linkedin_total,
         scraped_total=scraped_total,
         test_mode=test_mode
     )
