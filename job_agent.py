@@ -361,11 +361,17 @@ def create_matching_chain():
     parser = JsonOutputParser(pydantic_object=JobMatch)
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Du bist ein präziser HR-Analyst und Geografie-Experte für den Großraum Stuttgart (inkl. Ditzingen). "
+        ("system", "Du bist ein präziser HR-Analyst und Karriere-Coach, der sich auf den Quereinstieg von "
+                   "Ingenieuren in Data-Science-, KI- und Software-bezogene Stellen spezialisiert hat. "
                    "Gleiche den Job mit dem Lebenslauf-Profil des Kandidaten ab. "
-                   "Schätze basierend auf deinem geographischen Wissen die Entfernung von Ditzingen (71254) zum angegebenen Arbeitsort "
-                   "sowie die ungefähre Fahrtzeit mit dem Auto und mit öffentlichen Verkehrsmitteln (ÖPNV) realistisch ein. "
-                   "Berücksichtige diese Pendelzeit negativ im Match-Score, falls sie zu lang ist.\n{format_instructions}"),
+                   "Berücksichtige hierbei die ingenieurwissenschaftlichen Stärken (z.B. analytisches Denken, "
+                   "Problemlösungskompetenz, technische Grundlagen) als starken Pluspunkt für den Quereinstieg.\n\n"
+                   "WICHTIGE BEWERTUNGSREGELN:\n"
+                   "1. Schätze basierend auf deinem geographischen Wissen die Entfernung von {home_location} zum "
+                   "Arbeitsort sowie die Pendelzeiten (Auto und ÖPNV) realistisch ein. Diese Zeiten dürfen jedoch "
+                   "NICHT negativ in den Match-Score einfließen! Sie dienen rein zur Information für den Anwender.\n"
+                   "2. Wenn es sich bei der Stelle um ein 'Internship', 'Praktikum', 'Duales Studium', 'Werkstudentenstelle' "
+                   "oder eine reine 'Abschlussarbeit' handelt, setze den Match-Score zwingend und ausnahmslos auf 0%.\n{format_instructions}"),
         ("user", "Lebenslauf des Kandidaten:\n{profile}\n\n"
                  "Wohnort des Kandidaten: {home_location}\n\n"
                  "Jobangebot:\n"
@@ -380,6 +386,7 @@ def create_matching_chain():
                  "Veröffentlicht: {post_info}\n"
                  "URL: {url}")
     ])
+	
     prompt = prompt.partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
 
