@@ -226,9 +226,14 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
         run_input = {
             "keywords": titles_query,
             "location": location,       
-            "distance": int(distance_km * 0.62), # Entfernung in Meilen
             "datePosted": "past24Hours",
-            "limitPerSource": fetch_limit, 
+            "limitPerSource": fetch_limit,
+			"urlParam": [
+				{"key": "distance", "value": str(int(distance_km * 0.62))},      # Radius in Meilen
+				{"key": "f_JT", "value": "F,P,T"},       # Optionen: Vollzeit (F) / Teilzeit (P) / Freie Mitarbeit (C) / Befristete Anstellung (T), Praktikum (I), Ehrenamtlich(V)
+				{"key": "f_E", "value": "3,4"},          # Optionen: Ohne Berufserfahrung / Berufseinstieg / Junior / Professional / Senior (1-5)
+				{"key": "f_WT", "value": "2,3"},         # Optionen: Vor Ort / Nur Remote / Hybrid (1-3)
+				]
         }
         
         run = client.actor("curious_coder/linkedin-jobs-scraper").call(run_input=run_input)
@@ -236,8 +241,6 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
   
         jobs = []
         for item in raw_items:
-            if item.get("seniorityLevel") == "Not Applicable":
-                continue
             jobs.append({
                 "title": item.get("title", "N/A"),
                 "company": item.get("companyName", "N/A"),
