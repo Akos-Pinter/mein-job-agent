@@ -31,20 +31,20 @@ JOB_LIFETIME_DAYS = 14
 
 # 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
-    score: int = Field(description="Ein Score von 0 bis 100, wie gut der Job zum Profil passt. Berücksichtige die Fahrzeiten (Auto und ÖPNV) negativ, falls beide über 50 Minuten liegen!")
-    reason: str = Field(description="Begründung für die Bewertung (max. 20 Wörter). Erwähne kurz die Erreichbarkeit mit Auto vs. ÖPNV.")
+    score: int = Field(description="Ein Score von 0 bis 100, wie gut der Job zum Profil passt.")
+    reason: str = Field(description="Begründung für die Bewertung (max. 40 Wörter).")
     job_title: str = Field(description="Der Titel des analysierten Jobs.")
     company: str = Field(description="Die Firma des Jobs.")
     company_employee_count: str = Field(description="Die Mitarbeiteranzahl der Firma als formatiertes Textfeld (z.B. '240.000 Mitarbeiter' oder 'N/A' falls unbekannt).")
     location: str = Field(description="Der Arbeitsort (z.B. Stadt, Hybrid, Remote) des Jobs.")
-    route_distance: str = Field(description="Die geschätzte Entfernung von Ditzingen zum Arbeitsort in Kilometern (z.B. '25 km').")
+    route_distance: str = Field(description="Die geschätzte Entfernung vom Wohnort des Kandidats zum Arbeitsort in Kilometern (z.B. '25 km').")
     route_duration: str = Field(description="Die geschätzte Reisezeit mit dem Auto bei normalem Verkehr (z.B. '30 Min. Autofahrt').")
-    route_transit: str = Field(description="Die geschätzte Reisezeit mit Bahn/ÖPNV vom Bahnhof Ditzingen zum Ziel (z.B. '45 Min. mit ÖPNV').")
+    route_transit: str = Field(description="Die geschätzte Reisezeit mit Bahn/ÖPNV vom Wohnort des Kandidats zum Arbeitsort (z.B. '45 Min. mit ÖPNV').")
     contract_type: str = Field(description="Der Vertragstyp der Stelle (z.B. 'Full-time', 'Part-time', 'Contract' oder 'N/A').")
     experience_level: str = Field(description="Die geforderte Erfahrungsstufe der Stelle (z.B. 'Mid-Senior level', 'Entry level', 'Associate' oder 'N/A').")
     salary_source: str = Field(description="Das geschätzte oder verifizierte Gehalt / Gehaltsspanne der Stelle (z.B. '80.000 € - 95.000 €' oder 'N/A').")
     post_date: str = Field(description="Das genaue Veröffentlichungsdatum der Stelle (z.B. 'Vor 3 Tagen' oder das exakte Datum, falls vorhanden).")
-    job_summary: str = Field(description="Eine ultrakurze, prägnante Zusammenfassung der Stelle und Aufgaben (max. 2 Sätze).")
+    job_summary: str = Field(description="Eine kurze, prägnante Zusammenfassung der Stelle und Aufgaben (max. 5 Sätze).")
     required_qualifications: List[str] = Field(description="Eine Liste der wichtigsten 3-5 notwendigen Qualifikationen, Fähigkeiten oder Technologien.")
     url: str = Field(description="Die vollständige URL-Adresse zur Bewerbung oder zur Stellenausschreibung.")
 
@@ -368,8 +368,8 @@ def create_matching_chain():
                    "Problemlösungskompetenz, technische Grundlagen) als starken Pluspunkt für den Quereinstieg.\n\n"
                    "WICHTIGE BEWERTUNGSREGELN:\n"
                    "1. Schätze basierend auf deinem geographischen Wissen die Entfernung von {home_location} zum "
-                   "Arbeitsort sowie die Pendelzeiten (Auto und ÖPNV) realistisch ein. Diese Zeiten dürfen jedoch "
-                   "NICHT negativ in den Match-Score einfließen! Sie dienen rein zur Information für den Anwender.\n"
+                   "Arbeitsort sowie die Pendelzeiten (Auto und ÖPNV) realistisch ein. Liegt die Pendelzeit sowohl "
+				   "mit dem Auto als auch mit ÖPNV über eine Stunde, dann setze den Match-Score zwingend und ausnahmslos auf 0%.\n"
                    "2. Wenn es sich bei der Stelle um ein 'Internship', 'Praktikum', 'Duales Studium', 'Werkstudentenstelle' "
                    "oder eine reine 'Abschlussarbeit' handelt, setze den Match-Score zwingend und ausnahmslos auf 0%.\n{format_instructions}"),
         ("user", "Lebenslauf des Kandidaten:\n{profile}\n\n"
