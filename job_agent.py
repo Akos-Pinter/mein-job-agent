@@ -232,7 +232,7 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
 				{"key": "distance", "value": str(int(distance_km * 0.62))},      # Radius in Meilen
 				{"key": "f_JT", "value": "F,P,T"},       # Optionen: Vollzeit (F) / Teilzeit (P) / Freie Mitarbeit (C) / Befristete Anstellung (T), Praktikum (I), Ehrenamtlich(V)
 				{"key": "f_E", "value": "3,4"},          # Optionen: Ohne Berufserfahrung / Berufseinstieg / Junior / Professional / Senior (1-5)
-				{"key": "f_WT", "value": "2,3"},         # Optionen: Vor Ort / Nur Remote / Hybrid (1-3)
+				{"key": "f_WT", "value": "3"},         # Optionen: Vor Ort / Nur Remote / Hybrid (1-3)
 				]
         }
         
