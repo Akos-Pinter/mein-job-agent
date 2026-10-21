@@ -212,7 +212,7 @@ async def fetch_jobs_via_apify_indeed(search_titles: List[str], location: str, d
         return {"jobs": [], "scraped_total": 0}
 
 
-# 4.2 Job-Abfrage über Python Apify-Client (LinkedIn)
+# 4.3 Job-Abfrage über Python Apify-Client (LinkedIn)
 async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]: 
     print("Starte Job Abfrage über Apify LinkedIn Search...")
     token = os.getenv("APIFY_API_TOKEN")
@@ -245,7 +245,7 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
                 "title": item.get("title", "N/A"),
                 "company": item.get("companyName", "N/A"),
                 "description": item.get("descriptionText", "")[:5000],
-                "location": "N/A" if item.get("companyAddress") is None else item.get("companyAddress").get("addressLocality", "N/A"),
+                "location": item.get("location", "N/A"),
                 "url": item.get("link", "https://linkedin.com"),
                 "salary": item.get("salary", "N/A"),
                 "postDate": item.get("postedAt", "N/A"),
@@ -265,7 +265,7 @@ async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str,
         return {"jobs": [], "scraped_total": 0}
 
 
-# 4.3 Job-Abfrage über die offizielle Jobbörse (Bundesagentur für Arbeit)
+# 4.4 Job-Abfrage über die offizielle Jobbörse (Bundesagentur für Arbeit)
 async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
     print("Starte Job Abfrage über Bundesagentur für Arbeit...")
     headers = {
