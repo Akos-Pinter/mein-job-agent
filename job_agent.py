@@ -430,89 +430,274 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
     msg["Subject"] = f"🎯 {subject_prefix}Dein Job-Agent: {len(new_jobs)} neue | {len(full_jobs_list)} Gesamt-Matches"
     msg["From"] = f"Dein AI-Job-Agent <{sender_email}>"
     msg["To"] = receiver_email
+
     # Formatierung des API-Aufteilungstextes (z.B. "JSearch: 12 | BfA: 5")
     stats_formatted_list = [f"{api_name}: {count}" for api_name, count in api_stats.items() if count > 0]
     api_stats_str = " | ".join(stats_formatted_list) if stats_formatted_list else "Keine"
+    
+    # Verbessertes HTML-Layout für deine Homepage/E-Mails mit klaren Karten und echten Buttons
     html_template = f"""
     <html>
     <head>
         <style>
-            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; }}
-            .container {{ max-width: 600px; margin: 20px auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }}
-            h2 {{ color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }}
-            .job-card {{ background: #fdfdfd; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin-bottom: 20px; position: relative; }}
-            .new-badge {{ position: absolute; top: 15px; left: 15px; background-color: #ef4444; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }}
-            .api-badge {{ display: inline-block; background-color: #3b82f6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 8px; vertical-align: middle; }}
-            .score {{ font-size: 18px; font-weight: bold; float: right; }}
-            .section-title {{ font-weight: bold; color: #1f2937; margin-top: 12px; margin-bottom: 4px; font-size: 13px; text-transform: uppercase; }}
-            .summary-text {{ color: #4b5563; font-size: 14px; margin-top: 2px; margin-bottom: 10px; }}
-            .qualifications-list {{ margin: 0; padding-left: 20px; color: #4b5563; font-size: 13px; }}
-            .reason {{ font-style: italic; color: #1e3a8a; background-color: #eff6ff; padding: 10px; border-left: 3px solid #3b82f6; border-radius: 0 4px 4px 0; margin-top: 12px; margin-bottom: 15px; font-size: 13px; }}
-            .btn-apply {{ display: inline-block; background-color: #1e3a8a; color: white !important; padding: 10px 16px; text-decoration: none; border-radius: 4px; font-size: 13px; font-weight: bold; margin-top: 10px; }}
-            .location-text {{ color: #4b5563; font-size: 13px; margin-top: 4px; display: inline-block; }}
-            .route-info {{ background-color: #f3f4f6; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #374151; margin-top: 8px; display: block; line-height: 1.5; }}
-            .meta-info {{ margin-top: 10px; font-size: 13px; color: #4b5563; display: block; }}
-            .footer {{ font-size: 11px; color: #9ca3af; text-align: center; margin-top: 20px; }}
+            body {{ 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                background-color: #f4f6f9; 
+                color: #1f2937; 
+                line-height: 1.6;
+                padding: 10px;
+            }}
+            .container {{ 
+                max-width: 650px; 
+                margin: 20px auto; 
+                background: #f4f6f9; /* Transparenter Hintergrund für die Container-Fläche, damit Karten hervorstechen */
+                padding: 10px; 
+            }}
+            .header-box {{
+                background: #ffffff;
+                padding: 25px;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                margin-bottom: 25px;
+                border: 1px solid #e5e7eb;
+            }}
+            h2 {{ 
+                color: #1e3a8a; 
+                margin-top: 0;
+                margin-bottom: 10px;
+                font-size: 22px;
+                font-weight: 700;
+            }}
+            .stats-banner {{
+                background-color: #eff6ff; 
+                border: 1px solid #bfdbfe; 
+                padding: 16px; 
+                border-radius: 8px; 
+                font-size: 14px; 
+                color: #1e3a8a; 
+                margin-top: 15px;
+                line-height: 1.5;
+            }}
+            /* Job-Karte Styling: Klare Trennung durch Schatten, Abstände und weiße Hintergründe */
+            .job-card {{ 
+                background: #ffffff; 
+                border: 1px solid #e5e7eb; 
+                border-radius: 12px; 
+                padding: 24px; 
+                margin-bottom: 25px; 
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                transition: transform 0.2s ease;
+            }}
+            .card-header {{
+                display: flex; 
+                justify-content: space-between; 
+                align-items: flex-start; 
+                width: 100%; 
+                margin-bottom: 12px;
+                border-bottom: 1px solid #f3f4f6;
+                padding-bottom: 12px;
+            }}
+            .job-title-area {{
+                flex: 1;
+                padding-right: 15px;
+            }}
+            .new-badge {{ 
+                background-color: #ef4444; 
+                color: white; 
+                padding: 4px 8px; 
+                border-radius: 6px; 
+                font-size: 11px; 
+                font-weight: bold; 
+                text-transform: uppercase; 
+                margin-right: 8px; 
+                display: inline-block; 
+                vertical-align: middle; 
+            }}
+            .api-badge {{ 
+                display: inline-block; 
+                background-color: #3b82f6; 
+                color: white; 
+                padding: 3px 8px; 
+                border-radius: 6px; 
+                font-size: 11px; 
+                font-weight: 600; 
+                margin-left: 8px; 
+                vertical-align: middle; 
+            }}
+            .score-badge {{ 
+                font-size: 16px; 
+                font-weight: bold; 
+                padding: 6px 12px;
+                border-radius: 8px;
+                white-space: nowrap; 
+                text-align: right;
+            }}
+            .company-name {{
+                font-size: 16px;
+                color: #4b5563;
+                font-weight: 600;
+                margin-top: 4px;
+            }}
+            .location-text {{ 
+                color: #6b7280; 
+                font-size: 13px; 
+                margin-top: 6px; 
+                display: block; 
+            }}
+            .route-info {{ 
+                background-color: #f9fafb; 
+                padding: 12px 16px; 
+                border-radius: 8px; 
+                font-size: 13px; 
+                color: #374151; 
+                margin-top: 15px; 
+                border: 1px solid #f3f4f6;
+                line-height: 1.6; 
+            }}
+            .meta-grid {{ 
+                margin-top: 15px; 
+                font-size: 13px; 
+                color: #4b5563; 
+                line-height: 1.6;
+            }}
+            .section-title {{ 
+                font-weight: bold; 
+                color: #111827; 
+                margin-top: 18px; 
+                margin-bottom: 6px; 
+                font-size: 13px; 
+                text-transform: uppercase; 
+                letter-spacing: 0.05em;
+            }}
+            .summary-text {{ 
+                color: #374151; 
+                font-size: 14px; 
+                margin-top: 2px; 
+                margin-bottom: 12px; 
+            }}
+            .qualifications-list {{ 
+                margin: 0; 
+                padding-left: 20px; 
+                color: #374151; 
+                font-size: 13px; 
+            }}
+            .reason {{ 
+                font-style: italic; 
+                color: #1e3a8a; 
+                background-color: #f0fdf4; /* Matcht perfekt zu grünem Match-Erfolg */
+                border-left: 4px solid #10b981;
+                padding: 12px 16px; 
+                border-radius: 0 8px 8px 0; 
+                margin-top: 18px; 
+                margin-bottom: 20px; 
+                font-size: 13px; 
+            }}
+            /* Button-Styling statt einfachem Textlink */
+            .btn-container {{
+                text-align: right;
+                margin-top: 15px;
+            }}
+            .btn-apply {{ 
+                display: inline-block; 
+                background-color: #1e3a8a; 
+                color: #ffffff !important; 
+                padding: 12px 24px; 
+                text-decoration: none; 
+                border-radius: 8px; 
+                font-size: 14px; 
+                font-weight: bold; 
+                box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.2);
+                transition: background-color 0.2s ease;
+            }}
+            .btn-apply:hover {{
+                background-color: #1d4ed8;
+            }}
+            .footer {{ 
+                font-size: 11px; 
+                color: #9ca3af; 
+                text-align: center; 
+                margin-top: 30px; 
+                line-height: 1.5;
+            }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h2>🎯 Job-Agent Match-Report (Smart-Details)</h2>
-            <p>Hallo! Hier sind deine aktuellen Stellenausschreibungen inklusive Gehaltsspanne, Veröffentlichungsdatum und Arbeitsweg:</p>
-            <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 16px; border-radius: 6px; font-size: 13px; color: #1e3a8a; margin-bottom: 20px;">
-                📊 <b>Echtzeit-Stellenmarkt-Statistik für dich:</b><br>
-                • Davon für diesen Bericht live geladen: <b>{scraped_total}</b> ({api_stats_str})<br>
-                • Neu hinzugekommene und analysierte Treffer: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
-                • Gesamtanzahl in deinem Portfolio: <b>{len(full_jobs_list)}</b> (Aufbewahrung: {JOB_LIFETIME_DAYS} Tage)
+            <div class="header-box">
+                <h2>🎯 Job-Agent Match-Report</h2>
+                <p style="margin: 0; color: #4b5563;">Hallo! Hier sind deine personalisierten Job-Matches basierend auf deinen PDF-Profilen:</p>
+                <div class="stats-banner">
+                    <b>📊 Live-Statistiken für diesen Lauf:</b><br>
+                    • Aus gelesenen APIs importiert: <b>{scraped_total}</b> ({api_stats_str})<br>
+                    • Komplett neu analysierte Treffer: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
+                    • Gesamtes aktives Portfolio: <b>{len(full_jobs_list)}</b> (Aufbewahrungszeit: {JOB_LIFETIME_DAYS} Tage)
+                </div>
             </div>
     """
+
     for job in full_jobs_list:
         score = job['score']
         qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
         is_new = any(nj['url'] == job['url'] for nj in new_jobs)
-        new_badge_html = '<span style="background-color: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-right: 8px; display: inline-block; vertical-align: middle; white-space: nowrap;">NEU ✨</span>' if is_new else ''
+        
+        new_badge_html = '<span class="new-badge">NEU ✨</span>' if is_new else ''
         emp_count = job.get('company_employee_count', 'N/A')
         formatted_company_display = f"{job['company']} ({emp_count})" if emp_count != "N/A" else job['company']
         # Einlesen der genutzten API für die jeweilige Job-Karte
         job_api_source = job.get("api", "Unbekannt")
+        
+        # Dynamische Match-Farbe je nach Score-Höhe
+        score_color = '#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'
+        score_bg = '#ecfdf5' if score >= 70 else '#fffbeb' if score >= 40 else '#fef2f2'
+
         html_template += f"""
             <div class="job-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px;">
-                    <div style="display: flex; align-items: center; text-align: left; padding-right: 15px;">
+                <div class="card-header">
+                    <div class="job-title-area">
                         {new_badge_html}
-                        <strong style="font-size: 17px; color: #1e3a8a; vertical-align: middle;">
+                        <span style="font-size: 18px; font-weight: 700; color: #1e3a8a; vertical-align: middle;">
                             {job['job_title']}
-                        </strong>
-                        <span class="api-badge">{job_api_source}</span> <!-- NEU: API-Herkunfts-Badge -->
+                        </span>
+                        <span class="api-badge">{job_api_source}</span>
+                        <div class="company-name">{formatted_company_display}</div>
+                        <span class="location-text">📍 {job.get('location', 'N/A')}</span>
                     </div>
-                    <span style="font-size: 18px; font-weight: bold; color: {'#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'}; text-align: right; white-space: nowrap; margin-left: auto;">
+                    <div class="score-badge" style="color: {score_color}; background-color: {score_bg};">
                         {score}% Match
-                    </span>
+                    </div>
                 </div>
-                <span style="color: #4b5563; font-size: 14px;">{formatted_company_display}</span><br>
-                <span class="location-text">📍 {job.get('location', 'N/A')}</span><br>
+
                 <div class="route-info">
-                    🚗 <b>Auto Arbeitsweg:</b> {job.get('route_distance', 'N/A')} (ca. {job.get('route_duration', 'N/A')})<br>
-                    🚌 <b>ÖPNV Arbeitsweg:</b> {job.get('route_transit', 'N/A')}
+                    🚗 <b>Arbeitsweg (Auto):</b> {job.get('route_distance', 'N/A')} (ca. {job.get('route_duration', 'N/A')})<br>
+                    🚌 <b>Arbeitsweg (ÖPNV):</b> {job.get('route_transit', 'N/A')}
                 </div>
-                <div class="meta-info">
-                    💼 <b>Vertragstyp & Ebene:</b> {job.get('contract_type', 'N/A')} | {job.get('experience_level', 'N/A')}<br>
-                    💰 <b>Gehalt:</b> {job.get('salary_source', 'Nicht angegeben')}<br>
+
+                <div class="meta-grid">
+                    💼 <b>Anstellungstyp:</b> {job.get('contract_type', 'N/A')} | {job.get('experience_level', 'N/A')}<br>
+                    💰 <b>Gehaltsangabe:</b> {job.get('salary_source', 'Nicht angegeben')}<br>
                     📅 <b>Veröffentlicht:</b> {job.get('post_date', 'N/A')}
                 </div>
-                <div class="section-title">📋 Kurzbeschreibung der Stelle:</div>
+
+                <div class="section-title">📋 Kurzbeschreibung:</div>
                 <p class="summary-text">{job.get('job_summary', 'Keine Zusammenfassung verfügbar.')}</p>
-                <div class="section-title">🛠️ Geforderte Top-Qualifikationen:</div>
+
+                <div class="section-title">🛠️ Top-Qualifikationen:</div>
                 <ul class="qualifications-list">
                     {qual_items_html if qual_items_html else "<li>Keine spezifischen Qualifikationen angegeben.</li>"}
                 </ul>
-                <p class="reason"><strong>AI-Matching Grund:</strong> {job['reason']}</p>
-                <a href="{job.get('url', 'https://linkedin.com')}" target="_blank" class="btn-apply">Anzeige öffnen ➔</a>
+
+                <p class="reason"><strong>AI-Bewertung:</strong> {job['reason']}</p>
+
+                <!-- Der optimierte, ansprechende Button-Link -->
+                <div class="btn-container">
+                    <a href="{job.get('url', 'https://linkedin.com')}" target="_blank" class="btn-apply">Anzeige öffnen ➔</a>
+                </div>
             </div>
         """
+
     html_template += f"""
             <div class="footer">
-                Diese E-Mail wurde vollautomatisch über den PDF-Abgleich generiert.<br>
+                Diese E-Mail wurde vollautomatisch über deinen PDF-Profilabgleich generiert.<br>
                 Heimat-Wohnort: {MY_HOME_LOCATION}<br>
                 Modus: {'🔴 TEST MODUS AKTIV' if test_mode else '🟢 PRODUKTIONS-MODUS'}<br>
                 Host: GitHub Actions | Model: openai/gpt-oss-20b on Groq.
