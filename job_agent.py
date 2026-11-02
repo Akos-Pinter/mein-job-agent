@@ -639,7 +639,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
     for job in full_jobs_list:
         score = job['score']
         qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
-		job_url = job.get('url', '')
+        job_url = job.get('url', '')
         is_new = any(nj.get('url', '') == job_url for nj in new_jobs) if job_url else False
         
         new_badge_html = '<span class="new-badge">NEU ✨</span>' if is_new else ''
