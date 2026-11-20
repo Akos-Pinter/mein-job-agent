@@ -27,7 +27,7 @@ MY_HOME_LOCATION = os.getenv("HOME_LOCATION")
 print(MY_HOME_LOCATION)
 HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
-JOB_LIFETIME_DAYS = 28 
+JOB_LIFETIME_DAYS = 28
 
 # 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
@@ -390,11 +390,17 @@ def generate_qualification_recommendations(profile: str, jobs: List[Dict[str, An
     if not api_key:
         return "⚠️ GROQ_API_KEY fehlt. Qualifikationsanalyse kann nicht durchgeführt werden."
         
-    llm = ChatGroq(
+    primary_llm = ChatGroq(
+        model="openai/gpt-oss-120b",
+        temperature=0.2,
+        groq_api_key=api_key
+    )
+    fallback_llm = ChatGroq(
         model="openai/gpt-oss-20b",
         temperature=0.2,
         groq_api_key=api_key
     )
+    llm = primary_llm.with_fallbacks([fallback_llm])
     
     # Vorbereitung der Job-Details (Titel, Firma, benötigte Qualifikationen)
     jobs_summary_list = []
@@ -435,11 +441,17 @@ def generate_qualification_recommendations(profile: str, jobs: List[Dict[str, An
 # 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
-    llm = ChatGroq(
+    primary_llm = ChatGroq(
+        model="openai/gpt-oss-120b",
+        temperature=0.0,
+        groq_api_key=api_key
+    )
+    fallback_llm = ChatGroq(
         model="openai/gpt-oss-20b",
         temperature=0.0,
         groq_api_key=api_key
     )
+    llm = primary_llm.with_fallbacks([fallback_llm])
     parser = JsonOutputParser(pydantic_object=JobMatch)
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Du bist ein präziser HR-Analyst und Karriere-Coach, der sich auf den Quereinstieg von "
