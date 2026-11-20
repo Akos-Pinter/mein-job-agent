@@ -388,10 +388,10 @@ def generate_qualification_recommendations(profile: str, jobs: List[Dict[str, An
     if not high_score_jobs:
         return "Keine Jobs mit einem Match-Score von über 66% für eine Lückenanalyse gefunden."
         
-    # 2. Begrenzung auf die Top 5 Matches, um das Token-Limit (TPM) des 120b-Modells nicht zu sprengen
-    analyzed_jobs_limit = high_score_jobs[:5]
-    if len(high_score_jobs) > 5:
-        print(f"ℹ️ {len(high_score_jobs)} qualifizierte Jobs gefunden. Begrenze Analyse auf die Top 5, um API-Limits zu schonen.")
+    # 2. Begrenzung auf die Top 10 Matches, um das Token-Limit (TPM) des 120b-Modells nicht zu sprengen
+    analyzed_jobs_limit = high_score_jobs[:10]
+    if len(high_score_jobs) > 10:
+        print(f"ℹ️ {len(high_score_jobs)} qualifizierte Jobs gefunden. Begrenze Analyse auf die Top 10, um API-Limits zu schonen.")
         
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
