@@ -377,34 +377,29 @@ async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str,
         "scraped_total": len(jobs)
     }
 
-
 # 5.1 Funktion zur Qualifikationslücken-Analyse und Weiterbildungsempfehlung
 def generate_qualification_recommendations(profile: str, jobs: List[Dict[str, Any]]) -> str:
     print("🧠 Analysiere Qualifikationslücken für Jobs mit einem Match-Score > 66%...")
+    
+    # 1. Nur Jobs mit Score > 66% filtern und nach Score absteigend sortieren
     high_score_jobs = [job for job in jobs if job.get("score", 0) > 66]
+    high_score_jobs.sort(key=lambda x: x.get("score", 0), reverse=True)
     
     if not high_score_jobs:
         return "Keine Jobs mit einem Match-Score von über 66% für eine Lückenanalyse gefunden."
         
+    # 2. Begrenzung auf die Top 5 Matches, um das Token-Limit (TPM) des 120b-Modells nicht zu sprengen
+    analyzed_jobs_limit = high_score_jobs[:5]
+    if len(high_score_jobs) > 5:
+        print(f"ℹ️ {len(high_score_jobs)} qualifizierte Jobs gefunden. Begrenze Analyse auf die Top 5, um API-Limits zu schonen.")
+        
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return "⚠️ GROQ_API_KEY fehlt. Qualifikationsanalyse kann nicht durchgeführt werden."
-        
-    primary_llm = ChatGroq(
-        model="openai/gpt-oss-120b",
-        temperature=0.2,
-        groq_api_key=api_key
-    )
-    fallback_llm = ChatGroq(
-        model="openai/gpt-oss-20b",
-        temperature=0.2,
-        groq_api_key=api_key
-    )
-    llm = primary_llm.with_fallbacks([fallback_llm])
     
-    # Vorbereitung der Job-Details (Titel, Firma, benötigte Qualifikationen)
+    # Vorbereitung der Job-Details
     jobs_summary_list = []
-    for i, job in enumerate(high_score_jobs, 1):
+    for i, job in enumerate(analyzed_jobs_limit, 1):
         quals = ", ".join(job.get("required_qualifications", []))
         jobs_summary_list.append(
             f"Job {i}: {job.get('job_title') or job.get('title')} bei {job.get('company')} (Match-Score: {job.get('score')}%)\n"
@@ -426,19 +421,28 @@ def generate_qualification_recommendations(profile: str, jobs: List[Dict[str, An
                  "2. Konkreten Empfehlungen für Weiterbildungen, Kurse oder Zertifizierungen (z.B. Coursera, AWS, Python-Zertifikate, etc.)\n"
                  "3. Praktischen Maßnahmen und Projekten zur Schließung der Lücken, um das Profil attraktiver zu gestalten.")
     ])
-    
-    chain = prompt | llm
-    try:
-        response = chain.invoke({
-            "profile": profile,
-            "jobs_summary": jobs_summary_str
-        })
-        return response.content if hasattr(response, 'content') else str(response)
-    except Exception as e:
-        print(f"⚠️ Fehler bei der Generierung der Empfehlungen: {e}")
-        return f"Fehler bei der Qualifikationsanalyse: {e}"
 
-# 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
+    # Expliziter Try-Except Fallback-Mechanismus für TPM/Rate-Limit-Fehler
+    try:
+        print(f"🔮 Versuche Analyse mit Hauptmodell: {PRIMARY_MODEL}...")
+        llm_120b = ChatGroq(model=PRIMARY_MODEL, temperature=0.2, groq_api_key=api_key)
+        chain_120b = prompt | llm_120b
+        response = chain_120b.invoke({"profile": profile, "jobs_summary": jobs_summary_str})
+        return response.content if hasattr(response, 'content') else str(response)
+        
+    except Exception as primary_error:
+        # Falls 120b fehlschlägt (z.B. wegen Token-Anzahl 413), weichen wir sofort hart auf das 20b-Modell aus
+        print(f"⚠️ Hauptmodell fehlgeschlagen (Fehler: {primary_error}). Starte Fallback-Modell {FALLBACK_MODEL}...")
+        try:
+            llm_20b = ChatGroq(model=FALLBACK_MODEL, temperature=0.2, groq_api_key=api_key)
+            chain_20b = prompt | llm_20b
+            response = chain_20b.invoke({"profile": profile, "jobs_summary": jobs_summary_str})
+            return response.content if hasattr(response, 'content') else str(response)
+        except Exception as fallback_error:
+            print(f"❌ Auch das Fallback-Modell ist fehlgeschlagen: {fallback_error}")
+            return f"Fehler bei der Qualifikationsanalyse (Haupt- & Fallback-Modell fehlgeschlagen): {fallback_error}"
+
+# 5.2 LangChain-Chain definieren (openai/gpt-oss-120b via Groq)
 def create_matching_chain():
     api_key = os.getenv("GROQ_API_KEY")
     primary_llm = ChatGroq(
@@ -784,7 +788,7 @@ def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, A
                 Diese E-Mail wurde vollautomatisch über deinen PDF-Profilabgleich generiert.<br>
                 Heimat-Wohnort: {MY_HOME_LOCATION}<br>
                 Modus: {'🔴 TEST MODUS AKTIV' if test_mode else '🟢 PRODUKTIONS-MODUS'}<br>
-                Host: GitHub Actions | Model: openai/gpt-oss-20b on Groq.
+                Host: GitHub Actions | Model: openai/gpt-oss-120b on Groq.
             </div>
         </div>
     </body>
