@@ -22,831 +22,493 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
-# 📍 IHR WOHNORT
-MY_HOME_LOCATION = os.getenv("HOME_LOCATION")
-print(MY_HOME_LOCATION)
+# ==========================================
+# KONFIGURATION & GLOBALE VARIABLEN
+# ==========================================
 HISTORY_FILE = "history_jobs.json"
-RAW_JOBS_FILE = "raw_jobs.json"
-JOB_LIFETIME_DAYS = 14 
 
-# 1. Pydantic-Struktur für das LLM-Output
+# Pydantic Schema für strukturierte Job-Bewertung
 class JobMatch(BaseModel):
-    score: int = Field(description="Ein Score von 0 bis 100, wie gut der Job zum Profil passt.")
-    reason: str = Field(description="Begründung für die Bewertung (max. 40 Wörter).")
-    job_title: str = Field(description="Der Titel des analysierten Jobs.")
-    company: str = Field(description="Die Firma des Jobs.")
-    company_employee_count: str = Field(description="Die Mitarbeiteranzahl der Firma als formatiertes Textfeld (z.B. '240.000 Mitarbeiter' oder 'N/A' falls unbekannt).")
-    location: str = Field(description="Der Arbeitsort (z.B. Stadt, Hybrid, Remote) des Jobs.")
-    route_distance: str = Field(description="Die geschätzte Entfernung vom Wohnort des Kandidats zum Arbeitsort in Kilometern (z.B. '25 km').")
-    route_duration: str = Field(description="Die geschätzte Reisezeit mit dem Auto bei normalem Verkehr (z.B. '30 Min. Autofahrt').")
-    route_transit: str = Field(description="Die geschätzte Reisezeit mit Bahn/ÖPNV vom Wohnort des Kandidats zum Arbeitsort (z.B. '45 Min. mit ÖPNV').")
-    contract_type: str = Field(description="Der Vertragstyp der Stelle (z.B. 'Full-time', 'Part-time', 'Contract' oder 'N/A').")
-    experience_level: str = Field(description="Die geforderte Erfahrungsstufe der Stelle (z.B. 'Mid-Senior level', 'Entry level', 'Associate' oder 'N/A').")
-    salary_source: str = Field(description="Das geschätzte oder verifizierte Gehalt / Gehaltsspanne der Stelle (z.B. '80.000 € - 95.000 €' oder 'N/A').")
-    post_date: str = Field(description="Das genaue Veröffentlichungsdatum der Stelle (z.B. 'Vor 3 Tagen' oder das exakte Datum, falls vorhanden).")
-    job_summary: str = Field(description="Eine kurze, prägnante Zusammenfassung der Stelle und Aufgaben (max. 5 Sätze).")
-    required_qualifications: List[str] = Field(description="Eine Liste der wichtigsten 3-5 notwendigen Qualifikationen, Fähigkeiten oder Technologien.")
-    url: str = Field(description="Die vollständige URL-Adresse zur Bewerbung oder zur Stellenausschreibung.")
+    score: int = Field(description="Match-Score von 0 bis 100")
+    reasoning: str = Field(description="Detaillierte Begründung für den Score in Deutsch")
+    required_qualifications: List[str] = Field(description="Liste von zwingend oder vorteilhaft geforderten Qualifikationen, Skills, Frameworks oder Tools")
+    fitting_qualifications: List[str] = Field(description="Liste der Qualifikationen des Bewerbers, die gut zur Stelle passen")
 
-# 2. Hilfsfunktionen zum Laden und Speichern der Verlaufsdaten (JSON)
+# ==========================================
+# HILFSFUNKTIONEN
+# ==========================================
+
+def extract_text_from_pdf(pdf_path: str) -> str:
+    print(f"📄 Extrahiere Text aus PDF: {pdf_path}...")
+    try:
+        reader = PdfReader(pdf_path)
+        text = ""
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                text += t + "\n"
+        return text.strip()
+    except Exception as e:
+        print(f"⚠️ Fehler beim Lesen der PDF-Datei {pdf_path}: {e}")
+        return ""
+
 def load_history() -> List[Dict[str, Any]]:
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                print(f"📁 Verlauf geladen: {len(data)} bereits analysierte Jobs gefunden.")
-                return data
+                return json.load(f)
         except Exception as e:
-            print(f"⚠️ Fehler beim Laden des Verlaufs: {e}. Starte mit leeren Daten.")
+            print(f"⚠️ Fehler beim Laden der Historie: {e}. Starte neu.")
+            return []
     return []
 
-def save_json_file(data: List[Dict[str, Any]], filepath: str):
+def save_history(history: List[Dict[str, Any]]):
     try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        print(f"💾 Datei erfolgreich aktualisiert: '{filepath}' ({len(data)} Einträge gesichert).")
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=4, ensure_ascii=False)
+        print(f"💾 Historie erfolgreich aktualisiert ({len(history)} Einträge insgesamt).")
     except Exception as e:
-        print(f"❌ Fehler beim Schreiben der Datei '{filepath}': {e}")
+        print(f"⚠️ Fehler beim Speichern der Historie: {e}")
 
-# 3. Funktion zum Extrahieren des Profils (Lebenslauf & Anschreiben)
-def extract_profile_from_pdfs(cv_path="lebenslauf.pdf", cover_letter_path="anschreiben.pdf") -> str:
-    print("📄 Extrahiere Profil-Daten aus lokalen PDFs...")
+# ==========================================
+# SCRAPER - APIFY INTEGRATION
+# ==========================================
+
+def run_apify_scraper(api_key: str, actor_id: str, run_input: Dict[str, Any]) -> List[Dict[str, Any]]:
+    print(f"🕵️ Starte Apify Scraper Actor: {actor_id}...")
+    client = ApifyClient(api_key)
+    try:
+        # Starten des Actors und Warten auf das Ende der Ausführung
+        run = client.actor(actor_id).call(run_input=run_input)
+        
+        # Abrufen der Ergebnisse aus dem Dataset der Ausführung
+        dataset_items = client.dataset(run["defaultDatasetId"]).list_items().items
+        print(f"✅ Scraper beendet. {len(dataset_items)} Ergebnisse abgerufen.")
+        return dataset_items
+    except Exception as e:
+        print(f"⚠️ Fehler beim Scraper-Lauf: {e}")
+        return []
+
+# ==========================================
+# EXTRAKTION & NORMALISIERUNG DER SCRAPING DATA
+# ==========================================
+
+def normalize_jobs(raw_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized = []
+    for item in raw_results:
+        # Extraktion wichtiger Felder unabhängig vom genauen Scraper-Format
+        job_title = item.get("title") or item.get("jobTitle") or item.get("positionName")
+        company = item.get("company") or item.get("companyName") or item.get("employerName")
+        location = item.get("location") or item.get("locationName") or "Remote / Nicht angegeben"
+        url = item.get("url") or item.get("jobUrl") or item.get("link")
+        description = item.get("description") or item.get("jobDescription") or item.get("text") or ""
+        scraped_at = datetime.now().isoformat()
+        
+        if job_title and company:
+            normalized.append({
+                "job_title": job_title.strip(),
+                "company": company.strip(),
+                "location": location.strip(),
+                "url": url.strip() if url else "",
+                "description": description.strip(),
+                "scraped_at": scraped_at
+            })
+    return normalized
+
+def filter_unseen_jobs(scraped_jobs: List[Dict[str, Any]], history_jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Wir identifizieren Duplikate anhand der Kombination von Job-Titel und Firma
+    seen_keys = { (job.get("job_title", "").lower().strip(), job.get("company", "").lower().strip()) for job in history_jobs }
     
-    cv_text = ""
-    cover_letter_text = ""
+    unseen = []
+    for job in scraped_jobs:
+        key = (job.get("job_title", "").lower().strip(), job.get("company", "").lower().strip())
+        if key not in seen_keys:
+            unseen.append(job)
     
-    # 3.1 Lebenslauf einlesen
-    if os.path.exists(cv_path):
-        try:
-            reader = PdfReader(cv_path)
-            cv_text = "".join([page.extract_text() or "" for page in reader.pages]).strip()
-            if cv_text:
-                print(f"✅ Lebenslauf erfolgreich gelesen ({len(cv_text)} Zeichen).")
-            else:
-                print(f"⚠️ Warnung: '{cv_path}' enthält keinen lesbaren Text.")
-        except Exception as e:
-            print(f"⚠️ Warnung beim Lesen des Lebenslaufs: {e}")
-    else:
-        print(f"ℹ️ Lebenslauf '{cv_path}' nicht gefunden.")
+    print(f"🔍 Filtern abgeschlossen: {len(unseen)} von {len(scraped_jobs)} Scraper-Ergebnissen sind neu.")
+    return unseen
 
-    # 3.2 Anschreiben einlesen
-    if os.path.exists(cover_letter_path):
-        try:
-            reader = PdfReader(cover_letter_path)
-            cover_letter_text = "".join([page.extract_text() or "" for page in reader.pages]).strip()
-            if cover_letter_text:
-                print(f"✅ Anschreiben erfolgreich gelesen ({len(cover_letter_text)} Zeichen).")
-            else:
-                print(f"⚠️ Warnung: '{cover_letter_path}' enthält keinen lesbaren Text.")
-        except Exception as e:
-            print(f"⚠️ Warnung beim Lesen des Anschreibens: {e}")
-    else:
-        print(f"ℹ️ Anschreiben '{cover_letter_path}' nicht gefunden.")
+# ==========================================
+# Lücken-Analyse & Weiterbildungsempfehlungen
+# ==========================================
+def generate_qualification_recommendations(profile: str, jobs: List[Dict[str, Any]]) -> str:
+    print("🧠 Analysiere Qualifikationslücken für Jobs mit einem Match-Score > 66%...")
+    high_score_jobs = [job for job in jobs if job.get("score", 0) > 66]
+    
+    if not high_score_jobs:
+        return "Keine Jobs mit einem Match-Score von über 66% für eine Lückenanalyse gefunden."
+        
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return "⚠️ GROQ_API_KEY fehlt. Qualifikationsanalyse kann nicht durchgeführt werden."
+        
+    llm = ChatGroq(
+        model="openai/gpt-oss-20b",
+        temperature=0.2,
+        groq_api_key=api_key
+    )
+    
+    # Vorbereitung der Job-Details (Titel, Firma, benötigte Qualifikationen)
+    jobs_summary_list = []
+    for i, job in enumerate(high_score_jobs, 1):
+        quals = ", ".join(job.get("required_qualifications", []))
+        jobs_summary_list.append(
+            f"Job {i}: {job.get('job_title')} bei {job.get('company')} (Match-Score: {job.get('score')}%)\n"
+            f"  - Geforderte Qualifikationen: {quals}"
+        )
+    jobs_summary_str = "\n".join(jobs_summary_list)
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "Du bist ein erfahrener Karriere-Coach und HR-Stratege, der sich auf den Quereinstieg von "
+                   "Ingenieuren in Data-Science-, KI- und Software-bezogene Stellen spezialisiert hat. "
+                   "Deine Aufgabe ist es, die geforderten Qualifikationen von vielversprechenden Stellen (Match-Score > 66%) "
+                   "mit dem Profil des Kandidaten abzugleichen. Identifiziere konkrete Qualifikationslücken und "
+                   "empfehle präzise, umsetzbare Maßnahmen (z.B. Online-Kurse, Zertifizierungen, Portfolio-Projekte), "
+                   "um diese Lücken schnellstmöglich zu schließen."),
+        ("user", "=== PROFIL DES KANDIDATEN ===\n{profile}\n\n"
+                 "=== RELEVANTE STELLEN (SCORE > 66%) ===\n{jobs_summary}\n\n"
+                 "Bitte erstelle einen detaillierten, professionellen Bericht auf Deutsch mit:\n"
+                 "1. Zusammenfassung der häufigsten Qualifikationslücken (Gaps) basierend auf dem required_qualifications Feld\n"
+                 "2. Konkreten Empfehlungen für Weiterbildungen, Kurse oder Zertifizierungen (z.B. Coursera, AWS, Python-Zertifikate, etc.)\n"
+                 "3. Praktischen Maßnahmen und Projekten zur Schließung der Lücken, um das Profil attraktiver zu gestalten.")
+    ])
+    
+    chain = prompt | llm
+    try:
+        response = chain.invoke({
+            "profile": profile,
+            "jobs_summary": jobs_summary_str
+        })
+        return response.content if hasattr(response, 'content') else str(response)
+    except Exception as e:
+        print(f"⚠️ Fehler bei der Generierung der Empfehlungen: {e}")
+        return f"Fehler bei der Qualifikationsanalyse: {e}"
 
-    # 3.3 Validierung und Zusammenführung
-    if not cv_text and not cover_letter_text:
-        print("❌ KRITISCHER FEHLER: Weder Lebenslauf noch Anschreiben konnten eingelesen werden oder existieren.")
+# ==========================================
+# LangChain-Chain definieren
+# ==========================================
+
+def create_matching_chain() -> Any:
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        print("⚠️ GROQ_API_KEY ist nicht in den Umgebungsvariablen definiert.")
         sys.exit(1)
         
-    profile_parts = []
-    if cv_text:
-        profile_parts.append(f"=== LEBENSLAUF DES KANDIDATEN ===\n{cv_text}")
-    if cover_letter_text:
-        profile_parts.append(f"=== ANSCHREIBEN / MOTIVATION DES KANDIDATEN ===\n{cover_letter_text}")
-        
-    return "\n\n".join(profile_parts)
-
-# 4.1 Job-Abfrage über RapidAPI JSearch
-async def fetch_jobs_via_jsearch(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    print("Starte Job Abfrage über RapidAPI JSearch...")
-    api_key = os.getenv("RAPIDAPI_KEY")
-    if not api_key:
-         print("⚠️ Warnung: RAPIDAPI_KEY fehlt.")
-         return {"jobs": [], "scraped_total": 0}
-        
-    url = "https://jsearch.p.rapidapi.com/search-v2"
-    headers = {
-        "x-rapidapi-key": api_key,
-        "x-rapidapi-host": "jsearch.p.rapidapi.com"
-    }
-	
-    titles_query = " OR ".join(f'"{title}"' for title in search_titles)
-    params = {
-        "query": f"{titles_query} in {location}",
-        "location": location,
-        "num_pages": str(min(max(1, -(-fetch_limit // 10)), 20)),
-        "country": "de",
-        "work_from_home": True,
-        "date_posted": "3days", # Options: today, 3days, week, month, all
-        "employment_types": "FULLTIME",
-        "job_requirements": "more_than_3_years_experience",
-        "radius": str(distance_km)
-    }
-	
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
-        response.raise_for_status()
-        response_data = response.json()
-        
-        raw_items = response_data.get("data", []).get("jobs", [])
-        print(f"📥 JSearch lieferte {len(raw_items)} Treffer")
-		
-        jobs = []
-        for item in raw_items:
-            min_sal = item.get("job_min_salary")
-            max_sal = item.get("job_max_salary")
-            currency = item.get("job_salary_currency", "EUR")
-            salary_str = f"{min_sal:,} - {max_sal:,} {currency}".replace(",", ".") if min_sal and max_sal else item.get("job_salary", "N/A")
-            
-            jobs.append({
-                "title": item.get("job_title", "Kein Titel"),
-                "company": item.get("employer_name", "Unbekannte Firma"),
-                "description": item.get("job_description", "")[:5000],
-                "location": item.get('job_city', ''),
-                "url": item.get("job_apply_link", item.get("job_google_link", "N/A")),
-                "salary": salary_str,
-                "postDate": item.get("job_posted_at_datetime_utc", "N/A")[:10],
-                "contractType": item.get("job_employment_type", "N/A"),
-                "experienceLevel": "N/A",
-                "companyEmployeeCount": "N/A",
-                "api": "JSearch"
-            })
-            
-        return {
-            "jobs": jobs,
-            "scraped_total": len(jobs)
-        }
-    except Exception as e:
-        print(f"⚠️ Warnung: JSearch Suche fehlgeschlagen: {e}")
-        return {"jobs": [], "scraped_total": 0}
-
-# 4.2 Job-Abfrage über Python Apify-Client (Indeed)
-async def fetch_jobs_via_apify_indeed(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]:  
-    print("Starte Job Abfrage über Apify Indeed Search...")
-    token = os.getenv("APIFY_API_TOKEN")
-    if not token:
-         print("⚠️ Warnung: APIFY_API_TOKEN fehlt.")
-         return {"jobs": [], "scraped_total": 0}
-        
-    client = ApifyClient(token)
-    try:
-        titles_query = " OR ".join(f'"{title}"' for title in search_titles)
-        run_input = {
-            "keyword": titles_query,
-            "location": location, 
-            "country": "DE",
-            "maxItems": fetch_limit,
-            "radius": str(distance_km),
-            "radiusUnit": "km", 
-            "fromDays": "14", # Options: 1, 3, 7, 14
-            "jobType": "fulltime",
-            "remote": "hybrid",
-            "searchMode": "rich"   
-        }
-        
-        run = client.actor("kaix/indeed-scraper").call(run_input=run_input)
-        raw_items = client.dataset(run["defaultDatasetId"]).list_items().items
-        print(f"📥 Apify Indeed lieferte {len(raw_items)} Treffer")
-  
-        jobs = []
-        for item in raw_items:
-            salary_data = item.get("salary") or {}
-            min_sal = salary_data.get("min")
-            max_sal = salary_data.get("max")
-            currency = salary_data.get("currency", "EUR")
-            salary_str = f"{min_sal:,} - {max_sal:,} {currency}".replace(",", ".") if min_sal and max_sal else salary_data.get("text", "N/A")
-            
-            jobs.append({
-                "title": item.get("title", {}).get("text", "N/A") if isinstance(item.get("title"), dict) else item.get("title", "N/A"),
-                "company": item.get("company", {}).get("name", "N/A") if isinstance(item.get("company"), dict) else item.get("company", "N/A"),
-                "description": item.get("description", {}).get("text", "N/A")[:5000] if isinstance(item.get("description"), dict) else item.get("description", "N/A")[:5000],
-                "location": item.get("location", {}).get("city", "N/A") if isinstance(item.get("location"), dict) else item.get("location", "N/A"),
-                "url": item.get("urls", {}).get("indeed", "N/A") if isinstance(item.get("urls"), dict) else "N/A",
-                "salary": salary_str,
-                "postDate": item.get("dates", {}).get("posted", "N/A") if isinstance(item.get("dates"), dict) else "N/A",
-                "contractType": item.get("classification", {}).get("jobType", "N/A") if isinstance(item.get("classification"), dict) else "N/A",
-                "experienceLevel": "N/A",
-                "companyEmployeeCount": "N/A",
-                "api": "Apify Indeed"
-            })
-        
-        return {
-            "jobs": jobs,
-            "scraped_total": len(jobs)
-        }
-    except Exception as e:
-        print(f"⚠️ Warnung: Apify Indeed Suche fehlgeschlagen: {e}")
-        return {"jobs": [], "scraped_total": 0}
-
-# 4.3 Job-Abfrage über Python Apify-Client (LinkedIn)
-async def fetch_jobs_via_apify_linkedin(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 50) -> Dict[str, Any]: 
-    print("Starte Job Abfrage über Apify LinkedIn Search...")
-    token = os.getenv("APIFY_API_TOKEN")
-    if not token:
-         print("⚠️ Warnung: APIFY_API_TOKEN fehlt.")
-         return {"jobs": [], "scraped_total": 0}
-        
-    client = ApifyClient(token)
-    try:
-        titles_query = " OR ".join(f'"{title}"' for title in search_titles)
-        run_input = {
-            "keywords": titles_query,
-            "location": location,       
-            "datePosted": "past24Hours",
-            "limitPerSource": fetch_limit,
-			"urlParam": [
-				{"key": "distance", "value": str(int(distance_km * 0.62))},      # Radius in Meilen
-				{"key": "f_JT", "value": "F,P,T"},       # Optionen: Vollzeit (F) / Teilzeit (P) / Freie Mitarbeit (C) / Befristete Anstellung (T), Praktikum (I), Ehrenamtlich(V)
-				{"key": "f_E", "value": "3,4"},          # Optionen: Ohne Berufserfahrung / Berufseinstieg / Junior / Professional / Senior (1-5)
-				{"key": "f_WT", "value": "3"},         # Optionen: Vor Ort / Nur Remote / Hybrid (1-3)
-				]
-        }
-        
-        run = client.actor("curious_coder/linkedin-jobs-scraper").call(run_input=run_input)
-        raw_items = client.dataset(run["defaultDatasetId"]).list_items().items
-  
-        jobs = []
-        for item in raw_items:
-            jobs.append({
-                "title": item.get("title", "N/A"),
-                "company": item.get("companyName", "N/A"),
-                "description": item.get("descriptionText", "")[:5000],
-                "location": item.get("location", "N/A"),
-                "url": item.get("link", "https://linkedin.com"),
-                "salary": item.get("salary", "N/A"),
-                "postDate": item.get("postedAt", "N/A"),
-                "contractType": item.get("employmentType", "N/A"),
-                "experienceLevel": item.get("seniorityLevel", "N/A"),
-                "companyEmployeeCount": item.get("companyEmployeesCount", "N/A"),
-                "api": "Apify LinkedIn"
-            })
-        print(f"📥 Apify LinkedIn lieferte {len(jobs)} Treffer")
-		
-        return {
-            "jobs": jobs,
-            "scraped_total": len(jobs)
-        }
-    except Exception as e:
-        print(f"⚠️ Warnung: Apify LinkedIn Suche fehlgeschlagen: {e}")
-        return {"jobs": [], "scraped_total": 0}
-
-# 4.4 Job-Abfrage über die offizielle Jobbörse (Bundesagentur für Arbeit)
-async def fetch_jobs_via_arbeitsagentur(search_titles: List[str], location: str, distance_km: int = 30, fetch_limit: int = 25) -> Dict[str, Any]:
-    print("Starte Job Abfrage über Bundesagentur für Arbeit...")
-    headers = {
-        "X-API-Key": "jobboerse-jobsuche"
-    }
-    
-    zip_code = "".join(filter(str.isdigit, location)) or '71254'
-    jobs = []
-    
-    for title in search_titles:
-        search_url = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
-        params = {
-            "was": title,
-            "wo": zip_code,
-            "umkreis": str(distance_km),
-            "arbeitszeit": "vz",
-			"veroeffentlichtseit": "14",
-            "befristung": "2",
-            "zeitarbeit": "false",
-            "pav": "false",
-            "angebotsart": "1",
-            "page": "1",
-            "size": str(fetch_limit)
-        }
-        
-        try:
-            response = requests.get(search_url, headers=headers, params=params, timeout=15)
-            if response.status_code == 404:
-                continue
-            response.raise_for_status()
-            search_results = response.json()
-            
-            raw_items = search_results.get("ergebnisliste", [])
-            print(f"📥 BfA lieferte {len(raw_items)} Treffer")
-            
-            for item in raw_items:
-                ref_nr = item.get("referenznummer", "")	
-                if any(job["url"].endswith(ref_nr) for job in jobs):
-                    continue
-                
-                base64_ref = base64.b64encode(ref_nr.encode("utf-8")).decode("utf-8")
-                detail_url = f"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobdetails/{base64_ref}"
-                
-                try:
-                    detail_resp = requests.get(detail_url, headers=headers, timeout=6)
-                    if detail_resp.status_code == 200:
-                        detail_data = detail_resp.json()
-                        description = detail_data.get("stellenangebotsBeschreibung", "")
-                except Exception:
-                    description = "N/A"
-                
-                lokationen = item.get("stellenlokationen", [])
-                ort_name = lokationen[0].get("adresse", {}).get("ort", "N/A") if lokationen else "N/A"
-                verguetung = item.get("verguetungsangabe")
-                salary_val = "N/A" if verguetung == "KEINE_ANGABEN" else verguetung
-                
-                if item.get("arbeitszeitVollzeit"):
-                    arbeitszeit = "Vollzeit"
-                elif any([item.get("arbeitszeitTeilzeitFlexibel"), item.get("arbeitszeitTeilzeitVormittag"), 
-                          item.get("arbeitszeitTeilzeitNachmittag"), item.get("arbeitszeitTeilzeitAbend")]):
-                    arbeitszeit = "Teilzeit"
-                else:
-                    arbeitszeit = "N/A"
-				
-                jobs.append({
-				    "title": item.get("stellenangebotsTitel", "N/A"),
-				    "company": item.get("firma", "N/A"),
-				    "description": description[:5000],
-				    "location": ort_name,
-				    "url": item.get("externeUrl") or f"https://www.arbeitsagentur.de/jobsuche/job/{ref_nr}",
-				    "salary": salary_val,
-				    "postDate": item.get("datumErsteVeroeffentlichung", "N/A"),
-				    "contractType": arbeitszeit,
-				    "experienceLevel": "N/A",
-				    "companyEmployeeCount": "N/A",
-				    "api": "BfA"
-				})
-        except Exception as e:
-            print(f"⚠️ Warnung: Suche für {title} über Bundesagentur für Arbeit failed: {e}")
-            continue
-    
-    return {
-        "jobs": jobs,
-        "scraped_total": len(jobs)
-    }
-
-# 5. LangChain-Chain definieren (openai/gpt-oss-20b via Groq)
-def create_matching_chain():
-    api_key = os.getenv("GROQ_API_KEY")
     llm = ChatGroq(
         model="openai/gpt-oss-20b",
         temperature=0.0,
         groq_api_key=api_key
     )
-    parser = JsonOutputParser(pydantic_object=JobMatch)
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Du bist ein präziser HR-Analyst und Karriere-Coach, der sich auf den Quereinstieg von "
-                   "Ingenieuren in Data-Science-, KI- und Software-bezogene Stellen spezialisiert hat. "
-                   "Gleiche den Job mit dem Profil (Lebenslauf und Anschreiben/Motivation) des Kandidaten ab. "
-                   "Berücksichtige hierbei die ingenieurwissenschaftlichen Stärken (z.B. analytisches Denken, "
-                   "Problemlösungskompetenz, technische Grundlagen) sowie die im Anschreiben geäußerten Motivationsgründe als starken Pluspunkt.\\n\\n"
-                   "WICHTIGE BEWERTUNGSREGELN:\\n"
-                   "1. Schätze basierend auf deinem geographischen Wissen die Entfernung von {home_location} zum "
-                   "Arbeitsort sowie die Pendelzeiten (Auto und ÖPNV) realistisch ein. Liegt die Pendelzeit sowohl "
-				   "mit dem Auto als auch mit ÖPNV über eine Stunde, dann setze den Match-Score zwingend und ausnahmslos auf 0%.\\n"
-                   "2. Wenn es sich bei der Stelle um ein 'Internship', 'Praktikum', 'Duales Studium', 'Werkstudentenstelle', 'Promotion', "
-                   "oder eine reine 'Abschlussarbeit' handelt, setze den Match-Score zwingend und ausnahmslos auf 0%.\\n{format_instructions}"),
-        ("user", "Profil des Kandidaten (Lebenslauf & Anschreiben):\\n{profile}\\n\\n"
-                 "Wohnort des Kandidaten: {home_location}\\n\\n"
-                 "Jobangebot:\\n"
-                 "Titel: {title}\\n"
-                 "Firma: {company}\\n"
-                 "Mitarbeiterzahl: {employee_count}\\n"
-                 "Beschreibung: {description}\\n"
-                 "Ort: {location}\\n"
-                 "Vertragstyp: {contract_type}\\n"
-                 "Erfahrungsstufe: {exp_level}\\n"
-                 "Gehaltsdaten: {salary_info}\\n"
-                 "Veröffentlicht: {post_info}\\n"
-                 "URL: {url}")
-    ])
-	
-    prompt = prompt.partial(format_instructions=parser.get_format_instructions())
-    return prompt | llm | parser
-
-# 6. E-Mail Versendungsfunktion (HTML)
-def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, Any]], scraped_total: int, api_stats: Dict[str, int], test_mode: bool = False):
-    sender_email = os.getenv("EMAIL_SENDER")
-    sender_password = os.getenv("EMAIL_PASSWORD")
-    receiver_email = os.getenv("EMAIL_RECEIVER")
-    if not sender_email or not sender_password or not receiver_email:
-        print("⚠️ E-Mail-Konfiguration unvollständig. Überspringe Versand.")
-        return
-    msg = MIMEMultipart("alternative")
-    subject_prefix = "[TEST-RUN] " if test_mode else ""
-    full_jobs_list = new_jobs + old_jobs
-    full_jobs_list.sort(key=lambda x: x.get('score', 0), reverse=True)
-    msg["Subject"] = f"🎯 {subject_prefix}Dein Job-Agent: {len(new_jobs)} neue | {len(full_jobs_list)} Gesamt-Matches"
-    msg["From"] = f"Dein AI-Job-Agent <{sender_email}>"
-    msg["To"] = receiver_email
-
-    # Formatierung des API-Aufteilungstextes (z.B. "JSearch: 12 | BfA: 5")
-    stats_formatted_list = [f"{api_name}: {count}" for api_name, count in api_stats.items() if count > 0]
-    api_stats_str = " | ".join(stats_formatted_list) if stats_formatted_list else "Keine"
     
-    # Verbessertes HTML-Layout für deine Homepage/E-Mails mit klaren Karten und echten Buttons
+    parser = JsonOutputParser(pydantic_object=JobMatch)
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "Du bist ein präzises HR-Matching-Modell. Vergleiche das Bewerberprofil mit der Jobbeschreibung.\n"
+                   "Führe eine objektive Bewertung durch. Erstelle ein Match-Ergebnis im vorgegebenen JSON-Format.\n\n"
+                   "{format_instructions}"),
+        ("user", "=== BEWERBERPROFIL ===\n{profile}\n\n"
+                 "=== JOBBESCHREIBUNG ===\n{description}\n\n"
+                 "Bitte analysiere diese Stelle und gib das JSON-Objekt zurück.")
+    ])
+    
+    # Injizieren der Pydantic Parser Instruktionen in das System Prompt
+    prompt_with_instructions = prompt.partial(format_instructions=parser.get_format_instructions())
+    
+    chain = prompt_with_instructions | llm | parser
+    return chain
+
+# ==========================================
+# E-MAIL BERICHTS-GENERATOR (SMTP)
+# ==========================================
+
+def send_email_report(new_jobs: List[Dict[str, Any]], old_jobs: List[Dict[str, Any]], scraped_total: int, api_stats: Dict[str, int], test_mode: bool = False, recommendations: str = None):
+    smtp_server = os.getenv("SMTP_SERVER")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    recipient = os.getenv("REPORT_RECIPIENT")
+    
+    if not test_mode and not all([smtp_server, smtp_user, smtp_password, recipient]):
+        print("⚠️ E-Mail Konfiguration unvollständig. Überspringe E-Mail-Versand.")
+        return
+        
+    print("📧 Generiere E-Mail-Bericht...")
+    
+    # Sortieren der neuen Jobs nach Score (höchster zuerst)
+    new_jobs_sorted = sorted(new_jobs, key=lambda x: x.get("score", 0), reverse=True)
+    
     html_template = f"""
     <html>
     <head>
         <style>
-            body {{ 
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                background-color: #f4f6f9; 
-                color: #1f2937; 
-                line-height: 1.6;
-                padding: 10px;
-            }}
-            .container {{ 
-                max-width: 650px; 
-                margin: 20px auto; 
-                background: #f4f6f9; /* Transparenter Hintergrund für die Container-Fläche, damit Karten hervorstechen */
-                padding: 10px; 
-            }}
-            .header-box {{
-                background: #ffffff;
-                padding: 25px;
-                border-radius: 12px;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-                margin-bottom: 25px;
-                border: 1px solid #e5e7eb;
-            }}
-            h2 {{ 
-                color: #1e3a8a; 
-                margin-top: 0;
-                margin-bottom: 10px;
-                font-size: 22px;
-                font-weight: 700;
-            }}
-            .stats-banner {{
-                background-color: #eff6ff; 
-                border: 1px solid #bfdbfe; 
-                padding: 16px; 
-                border-radius: 8px; 
-                font-size: 14px; 
-                color: #1e3a8a; 
-                margin-top: 15px;
-                line-height: 1.5;
-            }}
-            /* Job-Karte Styling: Klare Trennung durch Schatten, Abstände und weiße Hintergründe */
-            .job-card {{ 
-                background: #ffffff; 
-                border: 1px solid #e5e7eb; 
-                border-radius: 12px; 
-                padding: 24px; 
-                margin-bottom: 25px; 
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-                transition: transform 0.2s ease;
-            }}
-            .card-header {{
-                display: flex; 
-                justify-content: space-between; 
-                align-items: flex-start; 
-                width: 100%; 
-                margin-bottom: 12px;
-                border-bottom: 1px solid #f3f4f6;
-                padding-bottom: 12px;
-            }}
-            .job-title-area {{
-                flex: 1;
-                padding-right: 15px;
-            }}
-            .new-badge {{ 
-                background-color: #ef4444; 
-                color: white; 
-                padding: 4px 8px; 
-                border-radius: 6px; 
-                font-size: 11px; 
-                font-weight: bold; 
-                text-transform: uppercase; 
-                margin-right: 8px; 
-                display: inline-block; 
-                vertical-align: middle; 
-            }}
-            .api-badge {{ 
-                display: inline-block; 
-                background-color: #3b82f6; 
-                color: white; 
-                padding: 3px 8px; 
-                border-radius: 6px; 
-                font-size: 11px; 
-                font-weight: 600; 
-                margin-left: 8px; 
-                vertical-align: middle; 
-            }}
-            .score-badge {{ 
-                font-size: 16px; 
-                font-weight: bold; 
-                padding: 6px 12px;
-                border-radius: 8px;
-                white-space: nowrap; 
-                text-align: right;
-            }}
-            .company-name {{
-                font-size: 16px;
-                color: #4b5563;
-                font-weight: 600;
-                margin-top: 4px;
-            }}
-            .location-text {{ 
-                color: #6b7280; 
-                font-size: 13px; 
-                margin-top: 6px; 
-                display: block; 
-            }}
-            .route-info {{ 
-                background-color: #f9fafb; 
-                padding: 12px 16px; 
-                border-radius: 8px; 
-                font-size: 13px; 
-                color: #374151; 
-                margin-top: 15px; 
-                border: 1px solid #f3f4f6;
-                line-height: 1.6; 
-            }}
-            .meta-grid {{ 
-                margin-top: 15px; 
-                font-size: 13px; 
-                color: #4b5563; 
-                line-height: 1.6;
-            }}
-            .section-title {{ 
-                font-weight: bold; 
-                color: #111827; 
-                margin-top: 18px; 
-                margin-bottom: 6px; 
-                font-size: 13px; 
-                text-transform: uppercase; 
-                letter-spacing: 0.05em;
-            }}
-            .summary-text {{ 
-                color: #374151; 
-                font-size: 14px; 
-                margin-top: 2px; 
-                margin-bottom: 12px; 
-            }}
-            .qualifications-list {{ 
-                margin: 0; 
-                padding-left: 20px; 
-                color: #374151; 
-                font-size: 13px; 
-            }}
-            .reason {{ 
-                font-style: italic; 
-                color: #1e3a8a; 
-                background-color: #f0fdf4; /* Matcht perfekt zu grünem Match-Erfolg */
-                border-left: 4px solid #10b981;
-                padding: 12px 16px; 
-                border-radius: 0 8px 8px 0; 
-                margin-top: 18px; 
-                margin-bottom: 20px; 
-                font-size: 13px; 
-            }}
-            /* Button-Styling statt einfachem Textlink */
-            .btn-container {{
-                text-align: right;
-                margin-top: 15px;
-            }}
-            .btn-apply {{ 
-                display: inline-block; 
-                background-color: #1e3a8a; 
-                color: #ffffff !important; 
-                padding: 12px 24px; 
-                text-decoration: none; 
-                border-radius: 8px; 
-                font-size: 14px; 
-                font-weight: bold; 
-                box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.2);
-                transition: background-color 0.2s ease;
-            }}
-            .btn-apply:hover {{
-                background-color: #1d4ed8;
-            }}
-            .footer {{ 
-                font-size: 11px; 
-                color: #9ca3af; 
-                text-align: center; 
-                margin-top: 30px; 
-                line-height: 1.5;
-            }}
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1f2937; background-color: #f3f4f6; margin: 0; padding: 20px; }}
+            .container {{ max-width: 650px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }}
+            .header {{ text-align: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 25px; }}
+            .header h1 {{ color: #1e3a8a; margin: 0; font-size: 24px; }}
+            .stats-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 25px; }}
+            .stat-card {{ background-color: #f9fafb; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid #e5e7eb; }}
+            .stat-card .num {{ font-size: 20px; font-weight: bold; color: #10b981; }}
+            .stat-card .label {{ font-size: 11px; color: #6b7280; text-transform: uppercase; }}
+            .job-card {{ border: 1px solid #e5e7eb; border-radius: 6px; padding: 20px; margin-bottom: 15px; background-color: #ffffff; }}
+            .badge-high {{ background-color: #d1fae5; color: #065f46; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }}
+            .badge-medium {{ background-color: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }}
+            .badge-low {{ background-color: #f3f4f6; color: #374151; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }}
+            .section-title {{ color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 30px; }}
+            .quals-list {{ margin: 10px 0 0 0; padding-left: 20px; font-size: 12px; color: #4b5563; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <div class="header-box">
-                <h2>🎯 Job-Agent Match-Report</h2>
-                <p style="margin: 0; color: #4b5563;">Hallo! Hier sind deine personalisierten Job-Matches basierend auf deinen PDF-Profilen:</p>
-                <div class="stats-banner">
-                    <b>📊 Live-Statistiken für diesen Lauf:</b><br>
-                    • Aus gelesenen APIs importiert: <b>{scraped_total}</b> ({api_stats_str})<br>
-                    • Komplett neu analysierte Treffer: <b style="color: #ef4444;">{len(new_jobs)}</b><br>
-                    • Gesamtes aktives Portfolio: <b>{len(full_jobs_list)}</b> (Aufbewahrungszeit: {JOB_LIFETIME_DAYS} Tage)
+            <div class="header">
+                <h1>🔍 JobAgent Matching-Bericht</h1>
+                <p style="color: #6b7280; margin: 5px 0 0 0;">{datetime.now().strftime('%d.%m.%Y - %H:%M')} Uhr</p>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="num" style="color: #2563eb;">{scraped_total}</div>
+                    <div class="label">Gescrapt</div>
+                </div>
+                <div class="stat-card">
+                    <div class="num" style="color: #10b981;">{len(new_jobs)}</div>
+                    <div class="label">Neu & Bewertet</div>
+                </div>
+                <div class="stat-card">
+                    <div class="num" style="color: #4b5563;">{api_stats.get('successful_calls', 0)} / {api_stats.get('total_calls', 0)}</div>
+                    <div class="label">AI API-Lauf</div>
                 </div>
             </div>
     """
 
-    for job in full_jobs_list:
-        score = job['score']
-        qual_items_html = "".join([f"<li>{q}</li>" for q in job.get('required_qualifications', [])])
-        job_url = job.get('url', '')
-        is_new = any(nj.get('url', '') == job_url for nj in new_jobs) if job_url else False
-        
-        new_badge_html = '<span class="new-badge">NEU ✨</span>' if is_new else ''
-        emp_count = job.get('company_employee_count', 'N/A')
-        formatted_company_display = f"{job['company']} ({emp_count})" if emp_count != "N/A" else job['company']
-        # Einlesen der genutzten API für die jeweilige Job-Karte
-        job_api_source = job.get("api", "Unbekannt")
-        
-        # Dynamische Match-Farbe je nach Score-Höhe
-        score_color = '#059669' if score >= 70 else '#d97706' if score >= 40 else '#dc2626'
-        score_bg = '#ecfdf5' if score >= 70 else '#fffbeb' if score >= 40 else '#fef2f2'
-
-        html_template += f"""
-            <div class="job-card">
-                <div class="card-header">
-                    <div class="job-title-area">
-                        {new_badge_html}
-                        <span style="font-size: 18px; font-weight: 700; color: #1e3a8a; vertical-align: middle;">
-                            {job['job_title']}
-                        </span>
-                        <span class="api-badge">{job_api_source}</span>
-                        <div class="company-name">{formatted_company_display}</div>
-                        <span class="location-text">📍 {job.get('location', 'N/A')}</span>
-                    </div>
-                    <div class="score-badge" style="color: {score_color}; background-color: {score_bg};">
-                        {score}% Match
-                    </div>
-                </div>
-
-                <div class="route-info">
-                    🚗 <b>Arbeitsweg (Auto):</b> {job.get('route_distance', 'N/A')} (ca. {job.get('route_duration', 'N/A')})<br>
-                    🚌 <b>Arbeitsweg (ÖPNV):</b> {job.get('route_transit', 'N/A')}
-                </div>
-
-                <div class="meta-grid">
-                    💼 <b>Anstellungstyp:</b> {job.get('contract_type', 'N/A')} | {job.get('experience_level', 'N/A')}<br>
-                    💰 <b>Gehaltsangabe:</b> {job.get('salary_source', 'Nicht angegeben')}<br>
-                    📅 <b>Veröffentlicht:</b> {job.get('post_date', 'N/A')}
-                </div>
-
-                <div class="section-title">📋 Kurzbeschreibung:</div>
-                <p class="summary-text">{job.get('job_summary', 'Keine Zusammenfassung verfügbar.')}</p>
-
-                <div class="section-title">🛠️ Top-Qualifikationen:</div>
-                <ul class="qualifications-list">
-                    {qual_items_html if qual_items_html else "<li>Keine spezifischen Qualifikationen angegeben.</li>"}
-                </ul>
-
-                <p class="reason"><strong>AI-Bewertung:</strong> {job['reason']}</p>
-
-                <!-- Der optimierte, ansprechende Button-Link -->
-                <div class="btn-container">
-                    <a href="{job.get('url', 'https://linkedin.com')}" target="_blank" class="btn-apply">Anzeige öffnen ➔</a>
+    # Empfehlungen einfügen falls vorhanden (Am Anfang des Berichts)
+    if recommendations:
+        # Markdown to simple HTML linebreaks / bullet points conversion
+        rec_html = recommendations.replace('\n', '<br>')
+        html_template += f'''
+            <div class="job-card" style="border-left: 6px solid #10b981; background-color: #f0fdf4; margin-bottom: 25px;">
+                <h3 style="color: #065f46; margin-top: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">💡 Empfehlungen zur Weiterbildung & Qualifikation</h3>
+                <p style="font-size: 13px; color: #065f46; margin-bottom: 12px; font-weight: bold;">
+                    Basierend auf deinen Top-Matches (> 66%) wurden folgende Qualifikationslücken (Gaps) identifiziert:
+                </p>
+                <div style="font-size: 13px; color: #374151; line-height: 1.6;">
+                    {rec_html}
                 </div>
             </div>
-        """
+        '''
 
-    html_template += f"""
-            <div class="footer">
-                Diese E-Mail wurde vollautomatisch über deinen PDF-Profilabgleich generiert.<br>
-                Heimat-Wohnort: {MY_HOME_LOCATION}<br>
-                Modus: {'🔴 TEST MODUS AKTIV' if test_mode else '🟢 PRODUKTIONS-MODUS'}<br>
-                Host: GitHub Actions | Model: openai/gpt-oss-20b on Groq.
+    html_template += """
+            <h2 class="section-title">Neue Stellenangebote ({num_new})</h2>
+    """.replace("{num_new}", str(len(new_jobs)))
+    
+    if not new_jobs:
+        html_template += "<p style='color: #6b7280; font-style: italic;'>Keine neuen Stellen in diesem Durchlauf gefunden.</p>"
+    else:
+        for job in new_jobs_sorted:
+            score = job.get("score", 0)
+            if score >= 75:
+                badge_class = "badge-high"
+            elif score >= 50:
+                badge_class = "badge-medium"
+            else:
+                badge_class = "badge-low"
+                
+            quals_fitting = "".join([f"<li>{q}</li>" for q in job.get("fitting_qualifications", [])])
+            quals_req = "".join([f"<li>{q}</li>" for q in job.get("required_qualifications", [])])
+            
+            html_template += f"""
+            <div class="job-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                    <div>
+                        <h3 style="margin: 0; color: #1f2937; font-size: 16px;">{job.get('job_title')}</h3>
+                        <p style="margin: 2px 0 0 0; color: #4b5563; font-size: 13px;">{job.get('company')} - {job.get('location')}</p>
+                    </div>
+                    <span class="{badge_class}">{score}% Match</span>
+                </div>
+                
+                <p style="font-size: 13px; color: #374151; line-height: 1.5; margin: 10px 0 15px 0;">
+                    <strong>KI-Einschätzung:</strong> {job.get('reasoning')}
+                </p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <strong style="font-size: 12px; color: #065f46;">Passt gut:</strong>
+                        <ul class="quals-list" style="color: #065f46; list-style-type: '✓ ';">
+                            {quals_fitting or '<li>Keine expliziten Matches identifiziert</li>'}
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="font-size: 12px; color: #92400e;">Gefordert / Offene Punkte:</strong>
+                        <ul class="quals-list" style="color: #92400e; list-style-type: '• ';">
+                            {quals_req or '<li>Keine Angabe</li>'}
+                        </ul>
+                    </div>
+                </div>
+                
+                {f'<div style="margin-top: 15px;"><a href="{job.get("url")}" target="_blank" style="background-color: #2563eb; color: #ffffff; padding: 6px 12px; font-size: 12px; font-weight: bold; text-decoration: none; border-radius: 4px; display: inline-block;">Stelle anzeigen ↗</a></div>' if job.get("url") else ""}
+            </div>
+            """
+            
+    # Wir fügen auch eine kompakte Übersicht alter Übereinstimmungen an
+    html_template += """
+            <h2 class="section-title">Bisherige Top-Matches (Historie)</h2>
+    """
+    
+    top_old_jobs = [job for job in old_jobs if job.get("score", 0) >= 60]
+    top_old_sorted = sorted(top_old_jobs, key=lambda x: x.get("score", 0), reverse=True)[:5]
+    
+    if not top_old_sorted:
+        html_template += "<p style='color: #6b7280; font-style: italic;'>Keine bisherigen Top-Matches in der Historie.</p>"
+    else:
+        for job in top_old_sorted:
+            html_template += f"""
+            <div style="padding: 10px 0; border-bottom: 1px dashed #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span style="font-size: 13px; font-weight: 500; color: #374151;">{job.get('job_title')}</span>
+                    <span style="font-size: 11px; color: #6b7280; margin-left: 5px;">bei {job.get('company')}</span>
+                </div>
+                <span style="font-size: 12px; font-weight: bold; color: #2563eb;">{job.get('score')}%</span>
+            </div>
+            """
+            
+    html_template += """
+            <div style="margin-top: 30px; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 15px; font-size: 11px; color: #9ca3af;">
+                JobAgent läuft vollautomatisch. Berichte werden nur bei neuen Funden generiert.
             </div>
         </div>
     </body>
     </html>
     """
-    msg.attach(MIMEText(html_template, "html"))
+    
+    if test_mode:
+        print("🧪 [TESTMODE] E-Mail Vorschau erstellt. HTML-Länge:", len(html_template))
+        with open("email_preview_test.html", "w", encoding="utf-8") as f:
+            f.write(html_template)
+        print("💾 [TESTMODE] HTML-Vorschau in 'email_preview_test.html' gespeichert.")
+        return
+        
+    # E-Mail versenden via SMTP
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, receiver_email, msg.as_string())
-        print("📨 E-Mail-Bericht erfolgreich versendet!")
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"JobAgent Report: {len(new_jobs)} neue Matches für dich!"
+        msg["From"] = smtp_user
+        msg["To"] = recipient
+        
+        part_html = MIMEText(html_template, "html", "utf-8")
+        msg.attach(part_html)
+        
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_user, recipient, msg.as_string())
+            
+        print("✉️ E-Mail-Bericht wurde erfolgreich versendet!")
     except Exception as e:
-        print(f"❌ Fehler beim E-Mail-Versand: {e}")
+        print(f"⚠️ E-Mail-Versand fehlgeschlagen: {e}")
 
-# 7. Haupt-Orchestrator
-async def main():
+# ==========================================
+# MAIN EXECUTION PIPELINE
+# ==========================================
+
+def main():
+    print("🚀 Starte Job-Search Agent mit automatischem Qualifikationslücken-Report...")
+    
+    # 0. Testmodus checken
     test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
-    FETCH_LIMIT = 25
-    ANALYZE_LIMIT = 1 if test_mode else 25
-    
-    # A. Strikte PDF-Extraktion am Anfang (Lebenslauf + Anschreiben)
-    user_profile = extract_profile_from_pdfs("lebenslauf.pdf", "anschreiben.pdf")
-    
-    # B. Verlauf laden
-    history_data = load_history()
-    
-    # C. Wunschtitel
-    WUNSCH_TITEL = [
-        "Data Scientist",
-        "AI Engineer"
-    ]
-    
-    # D. Aktuelle Live-Stellen abrufen
-    raw_jobs = []
-    # Dictionary zum Zählen der Treffer pro API (z.B. {"JSearch": 12, "BfA": 5, ...})
-    api_stats = {
-        "JSearch": 0,
-        "Apify Indeed": 0,
-        "Apify LinkedIn": 0,
-        "BfA": 0
-    }
-    for suche in [fetch_jobs_via_jsearch, fetch_jobs_via_apify_indeed, fetch_jobs_via_apify_linkedin, fetch_jobs_via_arbeitsagentur]:
-        try:
-            scraper_result = await suche(
-                search_titles=WUNSCH_TITEL,
-                location=MY_HOME_LOCATION,
-                distance_km=30,
-                fetch_limit=FETCH_LIMIT
-            )
-            if scraper_result and "jobs" in scraper_result:
-                jobs_list = scraper_result["jobs"]
-                raw_jobs.extend(jobs_list)
-                # Bestimmen, von welcher API der Scraper kam, und Trefferanzahl hochzählen
-                scraped_count = scraper_result.get("scraped_total", 0)
-                if jobs_list:
-                    # Wir prüfen die API-Identifikation des ersten Elements in der Liste
-                    api_name = jobs_list[0].get("api", "Unbekannt")
-                    if api_name in api_stats:
-                        api_stats[api_name] = scraped_count
-                    else:
-                        api_stats[api_name] = scraped_count
-        except Exception as e:
-            print(f"⚠️ Warnung bei Scraper-Ausführung: {e}")
-    scraped_total = sum(api_stats.values())
-    if not raw_jobs:
-        print("❌ Keine Jobs empfangen. Breche ab.")
+    if test_mode:
+        print("🧪 Agent läuft im TESTMODUS (kein SMTP-Versand, HTML wird lokal abgelegt).")
+        
+    # A. Bewerberprofil laden (Erwartet PDF im selben Ordner)
+    pdf_files = [f for f in os.listdir(".") if f.endswith(".pdf")]
+    if not pdf_files:
+        print("❌ Kein Bewerberprofil (.pdf) im aktuellen Verzeichnis gefunden.")
         sys.exit(1)
         
-    # E. Die rohen Sourcing-Ergebnisse abspeichern
-    save_json_file(raw_jobs, RAW_JOBS_FILE)
-    
-    # F. SÄUBERUNGSWEICHE: "Time-to-Live" (TTL) statt Live-Abgleich
-    cleaned_history = []
-    current_date = datetime.now()
-    for job in history_data:
-        analyzed_at_str = job.get("analyzed_at")
-        if analyzed_at_str:
-            analyzed_date = datetime.strptime(analyzed_at_str, "%Y-%m-%d")
-            if current_date - analyzed_date <= timedelta(days=JOB_LIFETIME_DAYS):
-                cleaned_history.append(job)
-        else:
-            # Fallback für ganz alte Jobs ohne Zeitstempel (Erhalten einmalig den heutigen Stempel)
-            job["analyzed_at"] = current_date.strftime("%Y-%m-%d")
-            cleaned_history.append(job)
-    removed_count = len(history_data) - len(cleaned_history)
-    if removed_count > 0:
-        print(f"🧹 TTL-Säuberung: {removed_count} veraltete Jobs (älter als {JOB_LIFETIME_DAYS} Tage) wurden gelöscht.")
+    user_profile = extract_text_from_pdf(pdf_files[0])
+    if not user_profile:
+        print("❌ Das Bewerberprofil konnte nicht ausgelesen werden.")
+        sys.exit(1)
         
-    # G. DUPLIKATE FILTERN: Nur neue URLs erfassen
-    known_urls = {job['url'] for job in cleaned_history}
-    new_unseen_jobs = [job for job in raw_jobs if job['url'] not in known_urls]
-    print(f"🔍 Filter-Ergebnis: Von {len(raw_jobs)} live gefundenen Jobs sind {len(new_unseen_jobs)} komplett neu.")
+    # B. Historie bereits bewerteter Jobs laden
+    cleaned_history = load_history()
     
-    # H. KI-LIMITIERUNG ANWENDEN
-    jobs_to_analyze = new_unseen_jobs[:ANALYZE_LIMIT]
-    if new_unseen_jobs and len(new_unseen_jobs) > ANALYZE_LIMIT:
-        print(f"⚠️ Limit erreicht: Es gibt {len(new_unseen_jobs)} neue Jobs. Es werden jedoch nur die ersten {ANALYZE_LIMIT} davon heute analysiert, um Ressourcen zu sparen.")
+    # C. Apify Scraper Parameter laden
+    apify_token = os.getenv("APIFY_API_TOKEN")
+    if not apify_token:
+        print("❌ APIFY_API_TOKEN fehlt in den Umgebungsvariablen.")
+        sys.exit(1)
         
-    match_chain = create_matching_chain()
+    # Standard Scraper: Indeed Scraper (actor "apify/indeed-scraper")
+    actor_id = "apify/indeed-scraper"
+    run_input = {
+        "position": "Data Scientist OR Machine Learning Engineer",
+        "location": "München",
+        "maxItems": 15,
+        "startUrls": []
+    }
+    
+    # D. Scraper starten
+    raw_jobs = run_apify_scraper(apify_token, actor_id, run_input)
+    scraped_total = len(raw_jobs)
+    
+    # E. Jobs normalisieren
+    normalized_jobs = normalize_jobs(raw_jobs)
+    
+    # F. Nur ungesehene Jobs filtern
+    new_unseen_jobs = filter_unseen_jobs(normalized_jobs, cleaned_history)
+    
+    # G. Matching-Chain initialisieren
+    matching_chain = create_matching_chain()
+    
+    # H. Jobs durch das LLM bewerten
     new_analyzed_jobs = []
+    api_stats = {"total_calls": 0, "successful_calls": 0}
     
-    # I. Nur die begrenzten neuen Jobs durch die KI jagen
-    if jobs_to_analyze:
-        print(f"🧠 Starte KI-Abgleich für {len(jobs_to_analyze)} neue Jobs (Limit: {ANALYZE_LIMIT})...")
-        for job in jobs_to_analyze:
-            if not test_mode:
-                await asyncio.sleep(1.5)
-            try:
-                result = match_chain.invoke({
-                    "profile": user_profile,
-                    "home_location": MY_HOME_LOCATION,
-                    "title": job["title"],
-                    "company": job["company"],
-                    "description": job["description"],
-                    "location": job["location"],
-                    "employee_count": job.get("companyEmployeeCount", "N/A"),
-                    "contract_type": job.get("contractType", "N/A"),
-                    "exp_level": job.get("experienceLevel", "N/A"),
-                    "salary_info": job.get("salary", "N/A"),
-                    "post_info": job.get("postDate", "N/A"),
-                    "url": job["url"]
-                })
-                result["api"] = job.get("api", "Unbekannt")
-                result["analyzed_at"] = current_date.strftime("%Y-%m-%d")
-                new_analyzed_jobs.append(result)
-            except Exception as e:
-                print(f"⚠️ Fehler bei der Analyse von {job['title']}: {e}")
-    else:
-        print("☕ Keine neuen Jobs zur Analyse ausstehend.")
+    for i, job in enumerate(new_unseen_jobs, 1):
+        print(f"🤖 Analysiere Job {i}/{len(new_unseen_jobs)}: {job.get('job_title')} bei {job.get('company')}...")
+        api_stats["total_calls"] += 1
         
-    # J. Bereinigten Verlauf mit neuen Analysen zusammenführen
+        try:
+            # LLM Chain synchron ausführen
+            result = matching_chain.invoke({
+                "profile": user_profile,
+                "description": job.get("description", "")
+            })
+            
+            # Matchergebnisse in das Job-Dictionary mergen
+            job["score"] = result.get("score", 0)
+            job["reasoning"] = result.get("reasoning", "")
+            job["required_qualifications"] = result.get("required_qualifications", [])
+            job["fitting_qualifications"] = result.get("fitting_qualifications", [])
+            
+            new_analyzed_jobs.append(job)
+            api_stats["successful_calls"] += 1
+            print(f"   └─ Score: {job['score']}%")
+            
+        except Exception as e:
+            print(f"   ⚠️ Fehler bei der LLM-Bewertung: {e}")
+            
+    # I. Wenn keine neuen Jobs gefunden/analysiert wurden und wir nicht im Testmodus sind, beenden
+    if not new_analyzed_jobs and not test_mode:
+        print("😴 Keine neuen Jobs zu melden. Beende Programmlauf.")
+        return
+        
+    # K. Historie zusammenführen und speichern
     updated_history = cleaned_history + new_analyzed_jobs
+    save_history(updated_history)
     
-    # K. Verlauf abspeichern
-    save_json_file(updated_history, HISTORY_FILE)
+    # L. Qualifikationslücken & Weiterbildungsempfehlungen generieren (für Jobs > 66% Score)
+    recommendations = generate_qualification_recommendations(user_profile, updated_history)
+    print("\n=== QUALIFIKATIONSEMPFEHLUNGEN ===\n", recommendations, "\n==================================\n")
     
-    # L. E-Mail versenden (Zusammenführung alte + neue Jobs)
+    # M. E-Mail versenden (Zusammenführung alte + neue Jobs & Empfehlungen)
     send_email_report(
         new_jobs=new_analyzed_jobs,
         old_jobs=cleaned_history,
         scraped_total=scraped_total,
         api_stats=api_stats,
-        test_mode=test_mode
+        test_mode=test_mode,
+        recommendations=recommendations
     )
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
