@@ -27,7 +27,7 @@ MY_HOME_LOCATION = os.getenv("HOME_LOCATION")
 print(MY_HOME_LOCATION)
 HISTORY_FILE = "history_jobs.json"
 RAW_JOBS_FILE = "raw_jobs.json"
-JOB_LIFETIME_DAYS = 14 
+JOB_LIFETIME_DAYS = 28 
 
 # 1. Pydantic-Struktur für das LLM-Output
 class JobMatch(BaseModel):
