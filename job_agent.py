@@ -417,13 +417,12 @@ def generate_qualification_recommendations(profile: str, jobs: List[Dict[str, An
                    "Ingenieuren in Data-Science-, KI- und Software-bezogene Stellen spezialisiert hat. "
                    "Deine Aufgabe ist es, die geforderten Qualifikationen von vielversprechenden Stellen (Match-Score > 66%) "
                    "mit dem Profil des Kandidaten abzugleichen. Identifiziere konkrete Qualifikationslücken und "
-                   "empfehle präzise, umsetzbare Maßnahmen (z.B. Online-Kurse, Zertifizierungen, Portfolio-Projekte), "
-                   "um diese Lücken schnellstmöglich zu schließen."),
+                   "empfehle Maßnahmen um diese Lücken schnellstmöglich zu schließen."),
         ("user", "=== PROFIL DES KANDIDATEN ===\n{profile}\n\n"
                  "=== RELEVANTE STELLEN (SCORE > 66%) ===\n{jobs_summary}\n\n"
-                 "Bitte erstelle einen detaillierten, professionellen Bericht auf Deutsch mit:\n"
+                 "Bitte erstelle einen kompakten (10-15 Sätze) Bericht auf Deutsch mit:\n"
                  "1. Zusammenfassung der häufigsten Qualifikationslücken (Gaps) basierend auf dem required_qualifications Feld\n"
-                 "2. Konkreten Empfehlungen für Weiterbildungen, Kurse oder Zertifizierungen (z.B. Coursera, AWS, Python-Zertifikate, etc.)\n"
+                 "2. Konkreten Empfehlungen für Weiterbildungen\n"
                  "3. Praktischen Maßnahmen und Projekten zur Schließung der Lücken, um das Profil attraktiver zu gestalten.")
     ])
     
